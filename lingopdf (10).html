@@ -1,0 +1,3653 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LingoPDF — okuyucu ve dil çalışma masası</title>
+<meta name="description" content="Yabancı dildeki PDF'leri oku, kelime kelime ve satır satır Türkçeye çevir, kelime kartı biriktir; PDF parçala, birleştir, imzala, tara.">
+<meta name="theme-color" content="#0B54C6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LingoPDF">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%230B54C6'/%3E%3Cstop offset='1' stop-color='%2316BE7C'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23g)'/%3E%3Cpath d='M18 14h20l10 10v26a4 4 0 0 1-4 4H18a4 4 0 0 1-4-4V18a4 4 0 0 1 4-4z' fill='%23fff' opacity='.92'/%3E%3Cpath d='M22 44l10-22 10 22' stroke='%23FB6F10' stroke-width='4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<style>
+:root{
+  --safe-top:env(safe-area-inset-top,0px); --safe-bot:env(safe-area-inset-bottom,0px);
+  --topH:calc(52px + var(--safe-top));
+  --headH:calc(100px + var(--safe-top));   /* üst blok: başlık + denetim satırı, açılışta ölçülüp güncellenir */
+  --bg1:#0B54C6; --bg2:#0E9FB4; --bg3:#16BE7C;
+  --glass:rgba(255,255,255,.08);
+  --glass2:rgba(255,255,255,.13);
+  --line:rgba(255,255,255,.18);
+  --fg:#F2FBF8; --mut:#CBE7E6;
+  --or:#FF7A18; --or2:#FFC08A; --ordk:#2B1405;
+  --ui:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --read:"Newsreader",Georgia,serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;overflow:hidden}
+body{
+  font-family:var(--ui);font-size:15px;color:var(--fg);
+  background:linear-gradient(160deg,var(--bg1) 0%,var(--bg2) 52%,var(--bg3) 100%);
+  background-attachment:fixed;
+}
+button,input,select{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+:focus-visible{outline:2px solid var(--or);outline-offset:2px}
+.hide{display:none !important}
+.sp{flex:1}
+
+/* ---- butonlar: turuncu ---- */
+.btn{
+  background:linear-gradient(180deg,#FFA33E,#FB6F10);
+  color:var(--ordk);font-weight:600;border-radius:11px;padding:11px 14px;line-height:1;
+  box-shadow:0 2px 10px rgba(249,123,46,.28);
+}
+.btn:active{transform:translateY(1px)}
+.btn.gh{background:var(--glass);color:var(--or2);border:1px solid var(--line);box-shadow:none;font-weight:600}
+.btn.sm{padding:8px 11px;font-size:14px;border-radius:9px}
+.btn:disabled{opacity:.5}
+.btn.wide{width:100%;text-align:center}
+
+/* ---- üst çubuk ---- */
+#top{display:flex;align-items:center;gap:10px;padding:calc(10px + var(--safe-top)) 12px 10px;background:transparent;
+     border-bottom:1px solid var(--line);backdrop-filter:blur(10px)}
+.logo{font-weight:700;font-size:17px;letter-spacing:-.02em}
+.logo small{font:600 10px var(--ui);opacity:.75;margin-left:5px;vertical-align:super}
+.logo i{font-style:normal;color:var(--or)}
+#fname{color:var(--mut);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+
+/* ---- okuma alanı ---- */
+#viewer{position:absolute;top:var(--headH);left:0;right:0;bottom:calc(64px + var(--safe-bot));overflow:auto;
+        background:rgba(4,34,58,.30);display:flex;justify-content:center;padding:12px 8px 20px;-webkit-overflow-scrolling:touch}
+body.zen #top, body.zen #nav, body.zen #sheet{display:none}
+body.zen #head{background:rgba(9,58,102,.72)}
+body.zen #viewer{top:calc(var(--safe-top) + 44px);right:0;bottom:0}
+#zenX{position:absolute;top:calc(8px + var(--safe-top));right:10px;z-index:30;display:none;
+      background:rgba(4,34,58,.55);border:1px solid var(--line);color:#fff;border-radius:12px;
+      padding:8px 12px;font:600 13px var(--ui);backdrop-filter:blur(8px)}
+body.zen #zenX{display:block}
+#flow{display:none;flex-direction:column;gap:14px;align-items:center;margin:auto}
+body.flow #stage{display:none}
+body.flow #flow{display:flex}
+body.flow #viewer{align-items:flex-start}
+.pg{position:relative;background:#fff;box-shadow:0 8px 28px rgba(0,0,0,.4);border-radius:3px;overflow:hidden}
+.pg canvas{display:block;width:100%;height:100%}
+.pg .lyr{position:absolute;inset:0;overflow:hidden;line-height:1}
+.pg .lyr .tx{position:absolute;white-space:pre;transform-origin:0 0;color:transparent;font-family:sans-serif}
+.pg .lyr .w{cursor:pointer;border-radius:3px}
+.pg .lyr .w.act{background:rgba(255,138,61,.55)}
+.pg .lyr .w.saved{box-shadow:inset 0 -2px 0 rgba(255,163,62,.85)}
+.pg .pns{position:absolute;inset:0;pointer-events:none}
+.pg .pns .pin{pointer-events:auto}
+.pg .no{position:absolute;left:8px;top:8px;font:600 11px var(--ui);color:#7a8b99;background:rgba(255,255,255,.85);
+        border-radius:6px;padding:2px 7px;z-index:3}
+.pg.night canvas{filter:invert(1) hue-rotate(180deg) contrast(.92)}
+#stage{position:relative;box-shadow:0 10px 40px rgba(0,0,0,.45);border-radius:3px;overflow:hidden;height:max-content;margin:auto}
+#cv{display:block}
+#layer{position:absolute;inset:0;overflow:hidden;line-height:1}
+#layer .tx{position:absolute;white-space:pre;transform-origin:0 0;color:transparent;font-family:sans-serif}
+#layer .w{cursor:pointer;border-radius:3px}
+#layer .w:hover{background:rgba(255,138,61,.35)}
+#layer .w.act{background:rgba(255,138,61,.55)}
+#layer .w.saved{background:rgba(46,196,170,.38)}
+
+/* ---- karşılama ---- */
+#welcome{position:absolute;inset:var(--headH) 0 118px;display:flex;align-items:center;justify-content:center;padding:18px;z-index:6;
+         background:linear-gradient(155deg,rgba(11,84,198,.92),rgba(14,159,180,.88) 55%,rgba(22,190,124,.92))}
+.wc{max-width:430px;text-align:center}
+.wc h1{font-family:var(--read);font-weight:500;font-size:28px;line-height:1.2;margin:0 0 10px}
+.wc p{color:#CFE6E2;line-height:1.6;margin:0 0 18px;font-size:14.5px}
+.wc .steps{display:grid;gap:8px;margin-top:16px;text-align:left}
+.wc .steps div{background:var(--glass);border:1px solid var(--line);border-radius:11px;padding:10px 12px;font-size:13.5px;color:#DCEEEB}
+.wc .steps b{color:var(--or2)}
+
+/* ---- sayfa çubuğu ---- */
+#head{position:absolute;top:0;left:0;right:0;z-index:22;background:rgba(9,58,102,.96);
+      border-bottom:1px solid var(--line);backdrop-filter:blur(10px)}
+#pbar{display:flex;align-items:center;gap:4px;padding:6px 10px calc(6px + 0px);
+      overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+#pbar::-webkit-scrollbar{display:none}
+#pbar.hide{display:none}
+#pbar button{padding:7px 11px;border-radius:999px;color:var(--fg);font-size:16px;line-height:1;
+             background:rgba(255,255,255,.10);border:1px solid var(--line);white-space:nowrap;flex:0 0 auto}
+#pbar button:active{background:var(--glass2)}
+#pnum{font-size:13px;color:var(--fg);padding:0 6px;min-width:60px;text-align:center;flex:0 0 auto}
+#pbar .z{font-size:13px;font-weight:600;color:var(--or2)}
+
+/* ---- alt gezinme ---- */
+#nav{position:absolute;left:0;right:0;bottom:0;z-index:20;display:flex;padding-bottom:var(--safe-bot);
+     background:linear-gradient(90deg,rgba(11,84,198,.94),rgba(22,190,124,.94));border-top:1px solid var(--line);backdrop-filter:blur(10px);
+     padding-bottom:env(safe-area-inset-bottom)}
+#nav button{flex:1;padding:10px 2px 12px;color:var(--mut);font-size:11.5px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:4px}
+#nav button .ic{font-size:19px;line-height:1}
+#nav button{color:rgba(255,255,255,.72)}
+#nav button.on{color:#FFD9A8}
+#nav .badge{position:absolute;transform:translate(16px,-4px);background:var(--or);color:var(--ordk);
+            border-radius:999px;font-size:10px;padding:1px 5px;font-weight:700}
+
+/* ---- panel (alt sayfa) ---- */
+#sheet{position:absolute;left:0;right:0;bottom:calc(64px + var(--safe-bot));top:auto;height:62vh;z-index:18;
+       background:linear-gradient(165deg,#0D64C8,#0E9FB4 55%,#16A579);border-top:1px solid var(--line);
+       border-radius:18px 18px 0 0;box-shadow:0 -14px 40px rgba(0,0,0,.45);
+       display:flex;flex-direction:column;transform:translateY(105%);transition:transform .24s ease}
+#sheet.open{transform:none}
+#sheet .hd{display:flex;align-items:center;gap:10px;padding:12px 14px 10px;border-bottom:1px solid var(--line)}
+#sheet .hd h3{margin:0;font-size:15.5px;font-weight:700}
+#sheetBody{flex:1;overflow:auto;padding:14px;padding-bottom:30px}
+.grip{width:38px;height:4px;border-radius:99px;background:var(--line);margin:7px auto 0}
+
+/* ---- içerik ---- */
+.hint{color:var(--mut);font-size:13.5px;line-height:1.6}
+.src{font-family:var(--read);font-size:16.5px;line-height:1.5}
+.trg{font-family:var(--ui);font-size:14px;line-height:1.55;color:#BFF7DF}
+.row{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.row label{min-width:96px;color:var(--mut);font-size:13px}
+select,input[type=text],input[type=number]{background:var(--glass);border:1px solid var(--line);border-radius:10px;padding:9px 10px}
+input[type=text],input[type=number]{flex:1;min-width:90px}
+.lrow{padding:10px;border-radius:10px;border:1px solid transparent;border-bottom:1px solid var(--glass);cursor:pointer}
+.lrow:active{background:var(--glass)}
+.num{color:var(--mut);font-size:11px;margin-right:6px}
+.card{background:var(--glass);border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-bottom:9px}
+.card .hd2{display:flex;align-items:baseline;gap:9px}
+.card .de{font-family:var(--read);font-size:18px;font-weight:600}
+.card .tr{color:var(--or2);font-size:14px}
+.card .x{margin-left:auto;color:var(--mut);font-size:20px;line-height:1;padding:0 4px}
+.card .meta{color:var(--mut);font-size:12.2px;margin-top:4px}
+.conj{color:#FFD9B0;font-family:var(--read);font-size:15.5px}
+
+/* kelime kartı */
+#word{position:absolute;left:8px;right:8px;bottom:calc(64px + var(--safe-bot));max-height:70vh;overflow:auto;z-index:30;
+      background:linear-gradient(165deg,#0C5FC0,#119BAE 60%,#15AE7F);border:1px solid var(--line);border-radius:16px;
+      box-shadow:0 -12px 44px rgba(0,0,0,.5)}
+#word .wh{display:flex;align-items:center;gap:9px;padding:13px 14px;border-bottom:1px solid var(--line);
+          position:sticky;top:0;background:#0C5FC0;z-index:2}
+#word .ww{font-family:var(--read);font-size:24px;font-weight:600}
+#word .pos{font-size:11.5px;color:var(--mut);border:1px solid var(--line);border-radius:999px;padding:2px 8px}
+#wordBody{padding:13px 14px 18px}
+.kv{margin-bottom:13px}
+.kv h4{margin:0 0 4px;font-size:11px;font-weight:700;color:var(--mut);letter-spacing:.04em}
+.kv p{margin:0;line-height:1.55}
+.big{font-size:18px;color:var(--or2);font-weight:600}
+.ex{font-family:var(--read);font-size:16px;line-height:1.45;margin:0 0 2px}
+.ext{color:#BFF7DF;font-size:13px;margin:0 0 9px}
+.chip{display:inline-block;background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:3px 9px;font-size:12px;margin:0 5px 5px 0}
+
+/* kitaplık */
+.book{display:flex;align-items:center;gap:11px;background:var(--glass);border:1px solid var(--line);
+      border-radius:12px;padding:11px;margin-bottom:9px}
+.book .th{width:38px;height:48px;border-radius:5px;background:linear-gradient(160deg,#FF9D3D,#16BE7C);
+          display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#06212F;flex:none}
+.book .nm{font-weight:600;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.book .mt{color:var(--mut);font-size:12px;margin-top:3px}
+
+/* modal + toast */
+.mask{position:fixed;inset:0;background:rgba(2,16,24,.72);z-index:60;display:flex;align-items:flex-end;justify-content:center}
+.modal{background:linear-gradient(165deg,#0D64C8,#0E9FB4 55%,#16A579);border:1px solid var(--line);width:100%;max-width:540px;
+       max-height:86vh;overflow:auto;border-radius:18px 18px 0 0}
+.modal h3{margin:0;padding:15px 16px;border-bottom:1px solid var(--line);font-size:16px}
+.mb{padding:14px 16px}
+.opt{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.opt button{background:var(--glass);border:1px solid var(--line);border-radius:10px;padding:11px 9px;font-size:13px;color:var(--fg)}
+.opt button.on{border-color:var(--or);background:rgba(255,138,61,.18);color:var(--or2);font-weight:600}
+.note{color:var(--mut);font-size:12px;line-height:1.5;margin:10px 0 0}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:78px;background:#08498F;border:1px solid var(--line);
+       padding:10px 15px;border-radius:12px;z-index:90;font-size:13.5px;box-shadow:0 10px 34px rgba(0,0,0,.5);max-width:90vw;text-align:center}
+.spin{display:inline-block;width:13px;height:13px;border:2px solid var(--or);border-top-color:transparent;
+      border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:7px}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:2.4s}#sheet{transition:none}}
+
+@media (min-width:901px){
+  body.compact #viewer{right:0;bottom:calc(118px + var(--safe-bot))}
+  body.compact #welcome{inset:var(--headH) 0 118px}
+  body.compact #nav{left:0;right:0;width:auto;top:auto;bottom:0;padding-bottom:var(--safe-bot);
+                    border-top:1px solid var(--line);border-bottom:0;border-left:0}
+  body.compact #sheet{left:0;right:0;width:auto;top:auto;bottom:calc(64px + var(--safe-bot));
+                      height:60vh;border-radius:18px 18px 0 0;border-left:0;transform:translateY(105%)}
+  body.compact #sheet.open{transform:none}
+  body.compact #sheet #shClose{display:block}
+  body.compact #sheet .grip{display:block}
+}
+@media (min-width:901px) and (max-width:1200px){
+  #viewer{right:340px}
+  #welcome{inset:var(--headH) 340px 0 0}
+  #nav{width:340px}
+  #sheet{width:340px}
+}
+@media (min-width:901px){
+  #viewer{bottom:0;right:430px}
+  #welcome{inset:var(--headH) 430px 0 0}
+  #nav{left:auto;right:0;width:430px;bottom:auto;top:var(--headH);padding-bottom:0;border-top:0;border-bottom:1px solid var(--line);border-left:1px solid var(--line)}
+  #sheet{top:calc(var(--headH) + 60px);bottom:0;left:auto;right:0;width:430px;height:auto;border-radius:0;border-left:1px solid var(--line);transform:none}
+  #sheet .grip{display:none}
+  #sheet #shClose{display:none}
+  #word{left:auto;right:446px;width:400px;bottom:20px}
+  .mask{align-items:center}
+  .modal{border-radius:18px}
+}
+
+.say{background:rgba(255,255,255,.14);border:1px solid var(--line);border-radius:7px;
+     padding:1px 6px;font-size:12px;margin-right:6px;vertical-align:2px;line-height:1.4}
+.say:active{background:var(--or);color:var(--ordk)}
+#cv.night{filter:invert(1) hue-rotate(180deg) contrast(.92)}
+#selBtn{position:absolute;z-index:34;display:flex;gap:6px}
+#selBtn button{padding:8px 12px;border-radius:10px;background:linear-gradient(180deg,#FFA33E,#FB6F10);
+        color:var(--ordk);font-weight:700;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.fres{padding:10px;border-bottom:1px solid var(--glass);cursor:pointer;font-size:13.5px}
+.fres b{color:var(--or2)}
+.srs{display:flex;gap:8px;margin-top:4px}
+.srs button{flex:1;border-radius:10px;padding:12px 6px;font-size:13px;font-weight:600;border:1px solid var(--line)}
+.srs .no{background:rgba(255,120,110,.22);color:#FFD4CF}
+.srs .hard{background:rgba(255,196,90,.20);color:#FFE6B8}
+.srs .ok{background:rgba(90,240,180,.20);color:#C6FFE7}
+.stat{color:var(--mut);font-size:12.5px;margin:0 0 10px}
+#ocrBar{position:absolute;left:10px;right:10px;bottom:126px;z-index:14;display:flex;align-items:center;gap:10px;
+        background:rgba(7,48,84,.92);border:1px solid var(--line);border-radius:12px;padding:10px 12px;
+        font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.4)}
+#ocrBar span{flex:1;color:var(--mut)}
+#netBar{position:absolute;left:10px;right:10px;top:calc(var(--topH) + 8px);z-index:16;display:none;
+        gap:10px;align-items:flex-start;background:rgba(120,26,18,.92);border:1px solid rgba(255,160,140,.35);
+        border-radius:12px;padding:10px 12px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.45)}
+#netBar.on{display:flex}
+#netBar .tx{flex:1;color:#ffe2dc;line-height:1.45}
+#netBar .bs{display:flex;flex-direction:column;gap:6px}
+body.zen #netBar{top:calc(var(--safe-top) + 8px)}
+.w2{cursor:pointer;border-radius:4px;padding:0 1px}
+.w2:active,.w2:hover{background:rgba(255,138,61,.35)}
+.w2.saved{background:rgba(46,196,170,.30)}
+.tbtn{background:rgba(255,255,255,.14);border:1px solid var(--line);border-radius:7px;padding:1px 7px;
+      font-size:11.5px;margin-right:6px;vertical-align:2px;color:var(--or2);font-weight:700}
+.thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+.thumb{position:relative;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:rgba(0,0,0,.25)}
+.thumb img{width:100%;height:96px;object-fit:cover;display:block}
+.thumb .no{position:absolute;left:5px;top:5px;background:rgba(0,0,0,.6);border-radius:6px;font-size:11px;padding:1px 6px}
+.thumb .del{position:absolute;right:4px;top:4px;background:rgba(0,0,0,.6);border-radius:6px;font-size:14px;padding:0 6px;color:#FFC0B4}
+.thumb .mv{position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,.6);border-radius:6px;font-size:13px;padding:0 6px}
+.sw{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:13.5px;color:var(--mut)}
+.sw input{width:18px;height:18px;accent-color:var(--or)}
+#pins{position:absolute;inset:0;pointer-events:none}
+#pins .pin{position:absolute;transform:translate(-50%,-100%);pointer-events:auto;background:var(--or);
+      color:var(--ordk);font-weight:700;font-size:12px;border-radius:10px 10px 10px 2px;padding:4px 8px;
+      box-shadow:0 3px 10px rgba(0,0,0,.45);max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#pins .hl{position:absolute;background:rgba(255,220,60,.32);border-bottom:2px solid rgba(255,190,30,.8);pointer-events:auto}
+#stage.noting{cursor:crosshair}
+#stage.noting #layer{pointer-events:none}
+.note-it{background:var(--glass);border:1px solid var(--line);border-radius:11px;padding:10px 12px;margin-bottom:9px}
+.note-it .q{font-family:var(--read);color:var(--mut);font-size:13.5px;border-left:2px solid var(--or);padding-left:8px;margin-bottom:6px}
+.note-it .t{line-height:1.5;white-space:pre-wrap}
+.note-it .b{display:flex;gap:8px;margin-top:8px}
+textarea{width:100%;min-height:110px;background:var(--glass);border:1px solid var(--line);
+         border-radius:10px;padding:10px;line-height:1.5;resize:vertical}
+#sigPad{width:100%;height:190px;background:#fff;border-radius:10px;touch-action:none;display:block}
+</style>
+</head>
+<body>
+<div id="head">
+<div id="top">
+  <div class="logo">Lingo<i>PDF</i><small id="ver"></small></div>
+  <div id="fname">Dosya açık değil</div>
+  <button class="btn gh sm" id="bPanel" title="Paneli alta al">▤</button>
+  <button class="btn gh sm" id="bZen" title="Tam ekran">⤢</button>
+  <button class="btn sm" id="bOpen">PDF aç</button>
+</div>
+<div id="pbar" class="hide">
+  <button id="bPrev">‹</button>
+  <span id="pnum">1 / 1</span>
+  <button id="bNext">›</button>
+  <button class="z" id="bZout">A−</button>
+  <button class="z" id="bZin">A+</button>
+  <button class="z" id="bFit">sığdır</button>
+  <button class="z" id="bNight">gece</button>
+  <button class="z" id="bFlow">dikey</button>
+  <button class="z" id="bNote">not</button>
+</div>
+</div>
+
+<div id="viewer">
+  <div id="stage"><canvas id="cv"></canvas><div id="layer"></div><div id="pins"></div></div>
+  <div id="flow"></div>
+  <button id="zenX">⤢ çık</button>
+</div>
+
+<div id="welcome">
+  <div class="wc">
+    <h1>Oku, kelimeye dokun, anlamını gör.</h1>
+    <p>Yabancı dildeki PDF’i aç; kelime kelime, satır satır ya da sayfanın tamamını Türkçeye çevir.</p>
+    <button class="btn wide" id="bOpen2">Telefondan / bilgisayardan PDF seç</button>
+    <button class="btn gh wide hide" id="bResume" style="margin-top:8px">Kaldığın yerden devam et</button>
+  <button class="btn gh wide" id="bLib2" style="margin-top:8px">Kitaplığımı aç</button>
+    <div class="steps">
+      <div><b>1.</b> PDF’i aç — sayfa ekrana sığacak şekilde açılır.</div>
+      <div><b>2.</b> Metindeki bir kelimeye dokun — sözlük kartı çıkar.</div>
+      <div><b>3.</b> Alt menüden <b>Çeviri</b> ve <b>Satır</b> ile bütün metni çevir.</div>
+      <div><b>4.</b> <b>Kitaplık</b> PDF’i cihazda saklar, kaldığın sayfayı hatırlar.</div>
+      <div><b>?</b> Çeviri durursa <b>Araçlar → Çeviri bağlantısı</b>’ndan ücretsiz Google Gemini anahtarı bağlayabilirsin.</div>
+    </div>
+  </div>
+</div>
+
+
+
+<div id="sheet">
+  <div class="grip"></div>
+  <div class="hd"><h3 id="shTitle">LingoPDF</h3><div class="sp"></div>
+    <button class="btn gh sm" id="shClose">Kapat</button></div>
+  <div id="sheetBody"><p class="hint">Alttaki (geniş ekranda üstteki) sekmelerden birini seç: Kitaplık, Çeviri, Satır, Kelimeler, Notlar, Araçlar.</p></div>
+</div>
+
+<div id="word" class="hide">
+  <div class="wh">
+    <div class="ww" id="wWord">—</div>
+    <div class="pos hide" id="wPos"></div>
+    <div class="sp"></div>
+    <button class="btn gh sm" id="wSay">🔊</button>
+    <button class="btn gh sm" id="wConj">çekim</button>
+    <button class="btn sm" id="wSave">Kaydet</button>
+    <button class="btn gh sm" id="wClose">✕</button>
+  </div>
+  <div id="wordBody"></div>
+</div>
+
+<nav id="nav">
+  <button data-t="lib"><span class="ic">▤</span>Kitaplık</button>
+  <button data-t="page"><span class="ic">⇄</span>Çeviri</button>
+  <button data-t="lines"><span class="ic">≡</span>Satır</button>
+  <button data-t="cards"><span class="ic">★</span>Kelimeler<span class="badge" id="cCount">0</span></button>
+  <button data-t="notes"><span class="ic">✎</span>Notlar</button>
+  <button data-t="tools"><span class="ic">⚙</span>Araçlar</button>
+</nav>
+
+<div id="netBar"><div class="tx" id="netTx"></div><div class="bs">
+  <button class="btn sm" id="netFix">Ücretsiz bağla</button>
+  <button class="btn gh sm" id="netRe">Yeniden dene</button>
+  <button class="btn gh sm" id="netX">Gizle</button></div></div>
+<div id="ocrBar" class="hide"><span>Bu sayfada seçilebilir metin yok — taranmış olabilir.</span><button class="btn sm" id="ocrGo">Metni çıkar</button></div>
+<input type="file" id="file" accept="application/pdf,.pdf" class="hide">
+<script>
+const $ = s => document.querySelector(s);
+const S = { flow:false, fitMode:"w", doc:null, bytes:null, name:"", id:null, page:1, pages:0, scale:1, fit:true,
+            lines:[], cards:[], lib:[], src:"de", tgt:"tr", engine:"ai", busy:false, last:null, tab:null };
+
+const cv = $("#cv"), ctx = cv.getContext("2d"), layer = $("#layer"), viewer = $("#viewer");
+
+if(typeof pdfjsLib === "undefined"){
+  document.body.innerHTML = '<div style="padding:40px;font:16px system-ui;color:#fff">PDF motoru yüklenemedi. İnternet bağlantısını kontrol edip sayfayı yenile.</div>';
+} else {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+}
+
+/* ---------- küçük yardımcılar ---------- */
+let tT;
+function toast(msg, ms=2600){
+  let t = $("#toast");
+  if(!t){ t = document.createElement("div"); t.id = "toast"; document.body.appendChild(t); }
+  t.innerHTML = msg; clearTimeout(tT);
+  if(ms) tT = setTimeout(()=>{ const x=$("#toast"); if(x) x.remove(); }, ms);
+  return t;
+}
+function work(m){ return toast('<span class="spin"></span>'+m, 0); }
+function done(t){ if(t) t.remove(); }
+function esc(s){ return (s||"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function dl(name, blob){
+  const u = URL.createObjectURL(blob), a = document.createElement("a");
+  a.href = u; a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(u); a.remove(); }, 1500);
+}
+function baseName(){ return (S.name||"belge").replace(/\.pdf$/i,""); }
+function clean(w){ return (w||"").replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ""); }
+function fmtSize(b){ return b > 1048576 ? (b/1048576).toFixed(1)+" MB" : Math.round(b/1024)+" KB"; }
+
+/* ---------- kalıcı kayıt ---------- */
+const mem = {};
+let storageOK = true;   // gerçek durum store.kind() ile belirlenir
+/* ---------- kalıcı depolama ----------
+   1) Claude içinde: window.storage
+   2) Normal tarayıcıda: IndexedDB (yüzlerce MB, sayfa kapansa da kalır)
+   3) IndexedDB yoksa: localStorage (~5 MB)
+   4) Hiçbiri yoksa: bellek (yalnız bu oturum)                              */
+let STORE_KIND = "mem";
+
+const IDB = (()=>{
+  let dbp = null;
+  const open = ()=> dbp || (dbp = new Promise((res, rej)=>{
+    let r;
+    try{ r = indexedDB.open("lingopdf", 1); }catch(e){ return rej(e); }
+    r.onupgradeneeded = ()=>{ if(!r.result.objectStoreNames.contains("kv")) r.result.createObjectStore("kv"); };
+    r.onsuccess = ()=> res(r.result);
+    r.onerror   = ()=> rej(r.error || new Error("IndexedDB açılmadı"));
+    r.onblocked = ()=> rej(new Error("IndexedDB engellendi"));
+  }));
+  const run = async (mode, fn)=>{
+    const db = await open();
+    return new Promise((res, rej)=>{
+      const t = db.transaction("kv", mode), q = fn(t.objectStore("kv"));
+      t.oncomplete = ()=> res(q ? q.result : undefined);
+      t.onerror = t.onabort = ()=> rej(t.error || new Error("depolama hatası"));
+    });
+  };
+  return {
+    has: typeof indexedDB !== "undefined" && !!indexedDB,
+    get: k => run("readonly",  st => st.get(k)),
+    set: (k, v) => run("readwrite", st => st.put(v, k)),
+    del: k => run("readwrite", st => st.delete(k))
+  };
+})();
+
+const LS = (()=>{
+  try{ localStorage.setItem("lingopdf:t", "1"); localStorage.removeItem("lingopdf:t"); return localStorage; }
+  catch(e){ return null; }
+})();
+
+/* hangi katman çalışıyorsa onu seç — bir kez, açılışta */
+const storeReady = (async ()=>{
+  if(window.storage){
+    try{ await window.storage.set("lingopdf:t", "1"); STORE_KIND = "claude"; return; }catch(e){}
+  }
+  if(IDB.has){
+    try{ await IDB.set("lingopdf:t", "1"); await IDB.del("lingopdf:t"); STORE_KIND = "idb"; return; }catch(e){}
+  }
+  if(LS){ STORE_KIND = "ls"; return; }
+  STORE_KIND = "mem";
+})();
+
+const store = {
+  async get(k){
+    await storeReady;
+    try{
+      if(STORE_KIND === "claude"){ const r = await window.storage.get(k); return r ? JSON.parse(r.value) : null; }
+      if(STORE_KIND === "idb"){ const v = await IDB.get(k); return v === undefined ? null : JSON.parse(v); }
+      if(STORE_KIND === "ls"){ const v = LS.getItem(k); return v === null ? null : JSON.parse(v); }
+    }catch(e){}
+    return (k in mem) ? mem[k] : null;
+  },
+  async set(k, v){
+    await storeReady;
+    const raw = JSON.stringify(v);
+    try{
+      if(STORE_KIND === "claude"){ const r = await window.storage.set(k, raw); if(!r) mem[k] = v; return true; }
+      if(STORE_KIND === "idb"){ await IDB.set(k, raw); return true; }
+      if(STORE_KIND === "ls"){ LS.setItem(k, raw); return true; }
+    }catch(e){ mem[k] = v; return false; }
+    mem[k] = v;
+    return false;
+  },
+  async del(k){
+    await storeReady;
+    try{
+      if(STORE_KIND === "claude") await window.storage.delete(k);
+      else if(STORE_KIND === "idb") await IDB.del(k);
+      else if(STORE_KIND === "ls") LS.removeItem(k);
+    }catch(e){}
+    delete mem[k];
+  },
+  kind(){ return STORE_KIND; },
+  kindName(){
+    return STORE_KIND === "claude" ? "Claude ortamı" :
+           STORE_KIND === "idb"    ? "tarayıcı veritabanı (IndexedDB)" :
+           STORE_KIND === "ls"     ? "tarayıcı deposu (sınırlı ~5 MB)" : "yalnız bu oturum (kalıcı değil)";
+  }
+};
+function b64(bytes){
+  let s = "";
+  for(let i=0; i<bytes.length; i+=0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i+0x8000));
+  return btoa(s);
+}
+function unb64(str){
+  const bin = atob(str), out = new Uint8Array(bin.length);
+  for(let i=0; i<bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/* ---------- dosya açma ---------- */
+$("#bOpen").onclick = $("#bOpen2").onclick = ()=> $("#file").click();
+$("#file").onchange = e => { const f = e.target.files[0]; if(f) openFile(f); e.target.value = ""; };
+["dragover","drop"].forEach(ev => document.addEventListener(ev, e=>{
+  e.preventDefault();
+  if(ev === "drop"){ const f = e.dataTransfer.files[0]; if(f && /pdf$/i.test(f.name)) openFile(f); }
+}));
+
+async function openFile(f){
+  const t = work("PDF açılıyor…");
+  try{
+    const buf = await f.arrayBuffer();
+    await openBytes(new Uint8Array(buf), f.name, null, 1);
+    done(t);
+  }catch(err){ done(t); toast("PDF açılamadı: " + err.message, 5000); }
+}
+
+async function openBytes(bytes, name, id, page){
+  S.bytes = bytes;
+  S.doc = await loadDoc(bytes);
+  S.name = name; S.id = id || null; S.pages = S.doc.numPages;
+  S.page = Math.min(Math.max(1, page||1), S.pages);
+  S.fit = true;
+  $("#fname").textContent = name + " · " + S.pages + " sayfa";
+  $("#welcome").classList.add("hide");
+  $("#pbar").classList.remove("hide");
+  await loadNotes();
+  await renderPage();
+  if(S.flow && typeof FLOW !== "undefined") await FLOW.build();
+  ensureTab();
+  if(!S.id) await autoKeep();        // hangi yoldan açılırsa açılsın kitaplığa alınır
+}
+
+/* ---------- çizim ---------- */
+async function renderPage(){
+  if(!S.doc) return;
+  const page = await S.doc.getPage(S.page);
+  if(S.fit) S.scale = fitScale(page.getViewport({ scale:1 }));
+  const vp = page.getViewport({ scale:S.scale });
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = Math.floor(vp.width*dpr); cv.height = Math.floor(vp.height*dpr);
+  cv.style.width = vp.width+"px"; cv.style.height = vp.height+"px";
+  $("#stage").style.width = vp.width+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle = "#fff"; ctx.fillRect(0,0,vp.width,vp.height);
+  await page.render({ canvasContext:ctx, viewport:vp }).promise;
+
+  const tc = await page.getTextContent();
+  buildLayer(tc, vp);
+  S.lines = groupLines(tc, vp);
+  cacheLoad(); applyNight(); checkOcr(); renderPins();
+  $("#pnum").textContent = S.page + " / " + S.pages;
+  viewer.scrollTop = 0;
+  if(S.tab === "lines") paneLines();
+  if(S.tab === "page") panePage();
+  saveProgress();
+}
+
+function buildLayer(tc, vp, target, scale){
+  const layer = target || document.getElementById("layer");
+  const sc = scale || S.scale;
+  layer.innerHTML = "";
+  const saved = new Set(S.cards.map(c=>c.word.toLowerCase()));
+  const frag = document.createDocumentFragment(), nodes = [];
+  tc.items.forEach(it=>{
+    if(!it.str || !it.str.trim()) return;
+    const t = pdfjsLib.Util.transform(vp.transform, it.transform);
+    const h = Math.hypot(t[2], t[3]);
+    if(h < 2) return;
+    const d = document.createElement("div");
+    d.className = "tx";
+    d.style.left = t[4]+"px"; d.style.top = (t[5]-h)+"px"; d.style.fontSize = h+"px";
+    it.str.split(/(\s+)/).forEach(p=>{
+      if(!p) return;
+      if(/\S/.test(p)){
+        const sp = document.createElement("span");
+        sp.className = "w"; sp.textContent = p;
+        if(saved.has(clean(p).toLowerCase())) sp.classList.add("saved");
+        d.appendChild(sp);
+      } else d.appendChild(document.createTextNode(p));
+    });
+    frag.appendChild(d); nodes.push([d, it.width*sc]);
+  });
+  layer.appendChild(frag);
+  nodes.forEach(([d,target])=>{
+    const w = d.getBoundingClientRect().width;
+    if(w > 1 && target > 1) d.style.transform = "scaleX("+(target/w)+")";
+  });
+}
+
+function groupLines(tc, vp){
+  const rows = [];
+  tc.items.forEach(it=>{
+    if(!it.str || !it.str.trim()) return;
+    const t = pdfjsLib.Util.transform(vp.transform, it.transform);
+    let r = rows.find(r=>Math.abs(r.y - t[5]) < 6);
+    if(!r){ r = { y:t[5], parts:[] }; rows.push(r); }
+    r.parts.push({ x:t[4], s:it.str });
+  });
+  rows.sort((a,b)=>a.y-b.y);
+  return rows.map(r=>({
+    text: r.parts.sort((a,b)=>a.x-b.x).map(p=>p.s).join(" ").replace(/\s+/g," ").trim(), tr:null
+  })).filter(r=>r.text);
+}
+function pageText(){ return S.lines.map(l=>l.text).join("\n"); }
+
+/* ---------- gezinme ---------- */
+function go(n){
+  if(!S.doc) return;
+  n = Math.max(1, Math.min(S.pages, n));
+  if(S.flow && typeof FLOW !== "undefined") return FLOW.goTo(n);
+  if(n === S.page) return;
+  S.page = n; renderPage();
+}
+$("#bPrev").onclick = ()=>go(S.page-1);
+$("#bNext").onclick = ()=>go(S.page+1);
+$("#bZin").onclick  = ()=>{ S.fit=false; S.scale = Math.min(4, S.scale*1.25); renderPage(); };
+$("#bZout").onclick = ()=>{ S.fit=false; S.scale = Math.max(.25, S.scale/1.25); renderPage(); };
+
+/* sığdırma kipleri: genişlik → tam sayfa → %100 */
+const FITS = { w:"genişlik", p:"tam sayfa", one:"%100" };
+function fitScale(v1){
+  const w = (viewer.clientWidth  - 22) / v1.width;
+  const h = (viewer.clientHeight - 24) / v1.height;
+  if(S.fitMode === "p")   return Math.max(.2, Math.min(4, Math.min(w, h)));
+  if(S.fitMode === "one") return 1;
+  return Math.max(.25, Math.min(4, w));
+}
+function fitLabel(){ $("#bFit").textContent = FITS[S.fitMode] || "sığdır"; }
+$("#bFit").onclick = async ()=>{
+  S.fitMode = S.fitMode === "w" ? "p" : S.fitMode === "p" ? "one" : "w";
+  S.fit = true; fitLabel();
+  await store.set("lingopdf:fitmode", S.fitMode);
+  toast("Sığdırma: " + FITS[S.fitMode], 1800);
+  if(S.flow && typeof FLOW !== "undefined") await FLOW.build();
+  else renderPage();
+};
+document.addEventListener("keydown", e=>{
+  if(/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+  if(e.key === "ArrowRight") go(S.page+1);
+  if(e.key === "ArrowLeft") go(S.page-1);
+  if(e.key === "Escape"){ $("#word").classList.add("hide"); closeSheet(); }
+});
+let rT; window.addEventListener("resize", ()=>{ clearTimeout(rT); rT = setTimeout(()=>{ if(S.fit) renderPage(); }, 250); });
+
+/* ---------- alt menü / panel ---------- */
+const TITLES = { lib:"Kitaplık", page:"Sayfa çevirisi", lines:"Satır satır çeviri", cards:"Kelimelerim", notes:"Notlarım", tools:"Araçlar" };
+function wide(){ return innerWidth >= 901 && !document.body.classList.contains("compact"); }
+
+function closeSheet(){
+  if(wide()) return;                       // geniş düzende panel sabit durur
+  $("#sheet").classList.remove("open"); S.tab = null;
+  document.querySelectorAll("#nav button").forEach(b=>b.classList.remove("on"));
+}
+
+/* geniş düzende panel her zaman görünür — boş kalmasın diye bir sekme açık tutulur */
+function ensureTab(){
+  if(!wide()) return;
+  if(!S.tab) return openTab(S.doc ? "page" : "lib");
+  if(S.doc && S.tab === "lib") openTab("page");   // belge açılınca kitaplıktan belgeye geç
+}
+addEventListener("resize", ()=> setTimeout(ensureTab, 150));
+$("#shClose").onclick = closeSheet;
+document.querySelectorAll("#nav button").forEach(b=>b.onclick = ()=>openTab(b.dataset.t));
+
+function openTab(t){
+  if(S.tab === t && $("#sheet").classList.contains("open")) return closeSheet();
+  S.tab = t;
+  document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("on", b.dataset.t === t));
+  $("#shTitle").textContent = TITLES[t];
+  $("#sheet").classList.add("open");
+  const fn = { lib:paneLib, page:panePage, lines:paneLines, cards:paneCards, notes:paneNotes, tools:paneTools }[t];
+  try{
+    if(!fn) throw new Error("panel bulunamadı: " + t);
+    fn();
+  }catch(e){
+    LAST_ERR = { yer:"panel:" + t, mesaj: errMsg(e), yigin: (e && e.stack || "").slice(0, 400), ts: Date.now() };
+    $("#sheetBody").innerHTML = '<p class="hint">Bu panel açılamadı.</p>' +
+      '<div class="card"><div class="meta" style="white-space:pre-wrap;color:#FFD4CF">' + esc(errMsg(e)) + '</div></div>' +
+      '<button class="btn gh wide" onclick="selfTest()">Kendini sına</button>';
+  }
+}
+$("#bLib2").onclick = ()=>openTab("lib");
+</script>
+<script>
+/* ================= KİTAPLIK (cihazda PDF depolama) ================= */
+const LIB_KEY = "lingopdf:lib", CHUNK = 1200000;
+function maxPdf(){   // tarayıcı veritabanında sınır çok daha geniş
+  const k = store.kind();
+  return k === "idb" ? 200 * 1024 * 1024 : k === "ls" ? 3 * 1024 * 1024 : 14 * 1024 * 1024;
+}
+
+async function loadLib(){ S.lib = (await store.get(LIB_KEY)) || []; }
+
+let AUTOSAVE = true;
+
+async function saveToLib(silent){
+  if(!S.bytes) return silent ? null : toast("Önce bir PDF aç.");
+  if(S.id) return silent ? null : toast("Bu PDF zaten kitaplıkta.");
+  const dup = S.lib.find(x=>x.name === S.name && Math.abs(x.size - S.bytes.length) < 64);
+  if(dup){
+    const oldKey = nKey();
+    S.id = dup.id;
+    if(notes.length){ await store.set(nKey(), notes); await store.del(oldKey); }
+    else await loadNotes();
+    await rememberLast();
+    renderPins();
+    if(!silent) toast("Bu dosya kitaplıkta zaten vardı, ona bağlandı.");
+    return dup.id;
+  }
+  if(S.bytes.length > maxPdf()){
+    toast("Dosya çok büyük (" + fmtSize(S.bytes.length) + "), saklanamadı. Bu cihazdaki sınır " + fmtSize(maxPdf()) + ".", 5000);
+    return null;
+  }
+  const t = work(silent ? "çalışman saklanıyor…" : "Kitaplığa kaydediliyor…");
+  try{
+    const id = "d" + Date.now().toString(36);
+    const data = b64(S.bytes);
+    const parts = Math.ceil(data.length / CHUNK);
+    for(let i=0; i<parts; i++){
+      t.innerHTML = '<span class="spin"></span>saklanıyor ' + (i+1) + " / " + parts;
+      const ok = await store.set("lingopdf:f:" + id + ":" + i, data.slice(i*CHUNK, (i+1)*CHUNK));
+      if(ok === false && !window.storage) throw new Error("bu ortamda kalıcı depolama kapalı");
+    }
+    const oldKey = nKey();
+    S.lib.unshift({ id, name:S.name, pages:S.pages, size:S.bytes.length, parts, page:S.page, ts:Date.now() });
+    await store.set(LIB_KEY, S.lib);
+    S.id = id;
+    if(notes.length){ await store.set(nKey(), notes); await store.del(oldKey); }
+    await rememberLast();
+    done(t);
+    toast(silent ? "Bu PDF kitaplığa alındı — bir dahaki açılışta hazır olacak." : "Kitaplığa eklendi.", 4000);
+    if(S.tab === "lib") paneLib();
+    return id;
+  }catch(e){ done(t); toast("Saklanamadı: " + errMsg(e), 4500); return null; }
+}
+
+async function autoKeep(){
+  if(!AUTOSAVE) return;
+  await saveToLib(true);
+}
+async function rememberLast(){
+  if(S.id) await store.set("lingopdf:last", { id:S.id, page:S.page });
+}
+
+async function openFromLib(id){
+  const b = S.lib.find(x=>x.id === id); if(!b) return;
+  const t = work("Kitaplıktan açılıyor…");
+  try{
+    let data = "";
+    for(let i=0; i<b.parts; i++){
+      t.innerHTML = '<span class="spin"></span>yükleniyor ' + (i+1) + " / " + b.parts;
+      const part = await store.get("lingopdf:f:" + b.id + ":" + i);
+      if(part == null) throw new Error("parça eksik");
+      data += part;
+    }
+    await openBytes(unb64(data), b.name, b.id, b.page || 1);
+    done(t); closeSheet();
+  }catch(e){ done(t); toast("Açılamadı: " + e.message, 4000); }
+}
+
+async function delFromLib(id){
+  const i = S.lib.findIndex(x=>x.id === id); if(i < 0) return;
+  const b = S.lib[i];
+  for(let k=0; k<b.parts; k++) await store.del("lingopdf:f:" + b.id + ":" + k);
+  S.lib.splice(i,1); await store.set(LIB_KEY, S.lib);
+  if(S.id === id) S.id = null;
+  paneLib(); toast("Silindi.");
+}
+
+let pT;
+function saveProgress(){
+  if(!S.id) return;
+  clearTimeout(pT);
+  pT = setTimeout(async ()=>{
+    const b = S.lib.find(x=>x.id === S.id);
+    if(b){ b.page = S.page; await store.set(LIB_KEY, S.lib); }
+    await rememberLast();
+  }, 900);
+}
+
+function paneLib(){
+  const b = $("#sheetBody");
+  const used = S.lib.reduce((a,x)=>a + (x.size||0), 0);
+  let h = '<div class="row"><input type="text" id="pLibQ" placeholder="kitaplıktaki tüm PDF’lerde ara">' +
+          '<button class="btn sm" id="pLibF">Ara</button></div>' +
+          '<label class="sw"><input type="checkbox" id="pLibAuto"' + (AUTOSAVE ? " checked" : "") + '>' +
+          ' Açtığım her PDF kendiliğinden saklansın</label>' +
+          '<p class="stat">' + S.lib.length + ' dosya · ' + fmtSize(used) + ' · ' +
+          S.cards.length + ' kelime' + (store.kind() === "mem" ? " · DEPOLAMA KAPALI" : "") + '</p>' +
+          '<button class="btn wide" id="pLibAdd">Açık PDF’i kitaplığa kaydet</button>' +
+          '<button class="btn gh wide" id="pLibOpen" style="margin-top:8px">Yeni PDF seç</button>' +
+          '<div class="row" style="margin-top:8px"><button class="btn gh sm" id="pLibBk" style="flex:1">Yedek al</button>' +
+          '<button class="btn gh sm" id="pLibRs" style="flex:1">Yedeği geri yükle</button></div>' +
+          (store.kind() === "mem"
+            ? '<p class="note">Uyarı: bu tarayıcıda kalıcı depolama kapalı (gizli sekme olabilir) — kayıtlar yalnız bu oturum boyunca durur. Kitaplık → Yedek al ile dosyaya indir.</p>'
+            : '<p class="note">Kayıt yeri: ' + store.kindName() + '. Veriler yalnız bu cihazda durur.</p>') +
+          '<div style="height:14px"></div>';
+  if(!S.lib.length){
+    h += '<p class="hint">Kitaplık boş. Bir PDF açıp yukarıdaki düğmeye bastığında dosya cihazında saklanır; bir dahaki açılışta kaldığın sayfadan devam edersin.</p>';
+  } else {
+    h += S.lib.map(x=>
+      '<div class="book"><div class="th">PDF</div><div style="flex:1;min-width:0">' +
+      '<div class="nm">' + esc(x.name) + '</div>' +
+      '<div class="mt">' + x.pages + ' sayfa · ' + fmtSize(x.size) + ' · kaldığın yer: s.' + (x.page||1) + '</div></div>' +
+      '<button class="btn sm" data-open="' + x.id + '">Aç</button>' +
+      '<button class="btn gh sm" data-del="' + x.id + '">Sil</button></div>'
+    ).join("");
+  }
+  b.innerHTML = h;
+  $("#pLibAdd").onclick = saveToLib;
+  $("#pLibF").onclick = ()=> libSearch($("#pLibQ").value.trim());
+  $("#pLibQ").addEventListener("keydown", e=>{ if(e.key === "Enter") libSearch(e.target.value.trim()); });
+  $("#pLibOpen").onclick = ()=> $("#file").click();
+  $("#pLibAuto").onchange = async e=>{ AUTOSAVE = e.target.checked; await store.set("lingopdf:autosave", AUTOSAVE); };
+  $("#pLibBk").onclick = backupAll;
+  $("#pLibRs").onclick = restoreAll;
+  b.querySelectorAll("[data-open]").forEach(el=>el.onclick = ()=>openFromLib(el.dataset.open));
+  b.querySelectorAll("[data-del]").forEach(el=>el.onclick = ()=>{
+    ask("Bu PDF kitaplıktan silinsin mi?", "Sil").then(y=>{ if(y) delFromLib(el.dataset.del); });
+  });
+}
+
+/* ================= ÇEVİRİ MOTORLARI ================= */
+let AI_OFF = "";
+const wait = ms => new Promise(r=>setTimeout(r, ms));
+
+function errMsg(e){
+  if(!e) return "bilinmeyen hata";
+  if(e.errors && e.errors.length) return e.errors.map(x=>errMsg(x)).filter(Boolean)[0] || "hepsi başarısız";
+  return e.message || e.name || "bilinmeyen hata";
+}
+
+let API_KEY = "", API_PROV = "env";
+(async ()=>{
+  API_KEY = (await store.get("lingopdf:key")) || "";
+  API_PROV = (await store.get("lingopdf:prov")) || (API_KEY ? "anthropic" : "env");
+})();
+
+/* --- Google Gemini (ücretsiz katman) --- */
+const GEM_BASE = "https://generativelanguage.googleapis.com/v1beta/";
+const GEM_YEDEK = ["gemini-3.8-flash","gemini-3.7-flash","gemini-3.5-flash","gemini-2.5-flash"];
+let GEM_MODEL = null;
+
+/* Model adını koda gömmüyoruz: hesabın erişebildiği modelleri Google'dan sorup
+   en yeni Flash modelini seçiyoruz. Google model kuşağını değiştirince kendiliğinden uyar. */
+async function gemModelSec(zorla){
+  if(GEM_MODEL && !zorla) return GEM_MODEL;
+  if(!zorla){
+    const kayit = await store.get("lingopdf:gmodel");
+    if(kayit && kayit.ad && Date.now() - (kayit.ts||0) < 7*86400000){ GEM_MODEL = kayit.ad; return GEM_MODEL; }
+  }
+  try{
+    const r = await fetch(GEM_BASE + "models?key=" + encodeURIComponent(API_KEY));
+    const d = JSON.parse(await r.text());
+    if(d && d.error) throw new Error(d.error.message);
+    const uygun = (d.models||[])
+      .filter(m=>(m.supportedGenerationMethods||[]).includes("generateContent"))
+      .map(m=>(m.name||"").replace("models/",""))
+      .filter(ad=>/^gemini-[\d.]+-flash$/.test(ad));           // deneysel/önizleme adlarını eleme
+    const puan = ad=>parseFloat((/gemini-([\d.]+)/.exec(ad)||[])[1] || 0);
+    uygun.sort((a,b)=>puan(b) - puan(a));
+    if(uygun.length){
+      GEM_MODEL = uygun[0];
+      await store.set("lingopdf:gmodel", { ad: GEM_MODEL, ts: Date.now() });
+      return GEM_MODEL;
+    }
+  }catch(e){ /* liste alınamadı: yedek sıraya düşeriz */ }
+  GEM_MODEL = GEM_YEDEK[0];
+  return GEM_MODEL;
+}
+
+async function gemCagir(model, system, prompt, image){
+  const parts = [];
+  if(image) parts.push({ inline_data:{ mime_type:"image/jpeg", data:image.split(",")[1] } });
+  parts.push({ text: prompt });
+  const ac = new AbortController();
+  const to = setTimeout(()=>ac.abort(), 45000);
+  let r;
+  try{
+    r = await fetch(GEM_BASE + "models/" + model + ":generateContent?key=" + encodeURIComponent(API_KEY), {
+      method:"POST", headers:{ "Content-Type":"application/json" }, signal: ac.signal,
+      body: JSON.stringify({
+        system_instruction:{ parts:[{ text: system }] },
+        contents:[{ role:"user", parts }],
+        generationConfig:{ maxOutputTokens:1200, temperature:0.2 }
+      })
+    });
+  }catch(e){
+    clearTimeout(to);
+    throw new Error(e.name === "AbortError" ? "Gemini yanıt vermedi (zaman aşımı)" : "Gemini'ye ulaşılamadı (" + (e.message||"ağ") + ")");
+  }
+  clearTimeout(to);
+  const raw = await r.text();
+  let d = null;
+  try{ d = JSON.parse(raw); }catch(e){}
+  if(d && d.error){
+    const msg = d.error.message || ("HTTP " + r.status);
+    const e2 = new Error(msg); e2.kod = r.status; throw e2;
+  }
+  const txt = ((((d||{}).candidates||[])[0]||{}).content||{}).parts;
+  const out = (txt||[]).map(x=>x.text||"").join("\n").trim();
+  if(!out){ const e3 = new Error(r.ok ? "boş yanıt" : "HTTP " + r.status); e3.kod = r.status; throw e3; }
+  return out;
+}
+
+async function gemini(system, prompt, image){
+  let model = await gemModelSec(false);
+  try{
+    return await gemCagir(model, system, prompt, image);
+  }catch(e){
+    const yok = e.kod === 404 || /not found|not supported|deprecated|bulunamad/i.test(e.message || "");
+    if(!yok) throw e;
+    // model kaldırılmış: listeyi tazele, olmazsa yedek adları sırayla dene
+    const yeni = await gemModelSec(true);
+    if(yeni !== model){
+      try{ return await gemCagir(yeni, system, prompt, image); }catch(e2){ model = yeni; }
+    }
+    for(const ad of GEM_YEDEK){
+      if(ad === model) continue;
+      try{
+        const out = await gemCagir(ad, system, prompt, image);
+        GEM_MODEL = ad; await store.set("lingopdf:gmodel", { ad, ts: Date.now() });
+        return out;
+      }catch(e3){ if(!(e3.kod === 404 || /not found|not supported|deprecated/i.test(e3.message||""))) throw e3; }
+    }
+    throw new Error("Gemini'de kullanılabilir model bulunamadı. Anahtar başka bir proje için olabilir ya da model adları değişmiş olabilir.");
+  }
+}
+
+function aiHeaders(){
+  return (API_KEY && API_PROV === "anthropic")
+    ? { "Content-Type":"application/json", "x-api-key":API_KEY,
+        "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true" }
+    : { "Content-Type":"application/json" };
+}
+
+async function ai(system, prompt){
+  if(API_PROV === "gemini" && API_KEY) return gemini(system, prompt);
+  let last = "bilinmeyen hata";
+  for(let k=0; k<4; k++){
+    let r, raw = "";
+    const ac = new AbortController();
+    const to = setTimeout(()=>ac.abort(), 40000);
+    try{
+      r = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST", headers: aiHeaders(), signal: ac.signal,
+        body: JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:1000, system,
+                               messages:[{ role:"user", content:prompt }] })
+      });
+      raw = await r.text();
+    }catch(e){
+      clearTimeout(to);
+      if(e.name === "AbortError"){ last = "yanıt gelmedi (zaman aşımı)"; await wait(500); continue; }
+      last = "bağlantı koptu (" + (e.message || "ağ hatası") + ")";
+      if(k < 3){ await wait(800 * (k+1)); continue; }
+      AI_OFF = "ağ engellendi";
+      throw new Error(API_KEY
+        ? "yapay zekâya ulaşılamadı (anahtarla doğrudan erişim de başarısız)"
+        : "istek engellendi — kota dolmuş olabilir. Araçlar → Çeviri bağlantısı’ndan ücretsiz Google Gemini anahtarı bağlayabilirsin");
+    }
+    clearTimeout(to);
+    let data = null;
+    try{ data = JSON.parse(raw); }
+    catch(e){ const m = raw.match(/\{[\s\S]*\}/); if(m) try{ data = JSON.parse(m[0]); }catch(e2){} }
+    const err = (data && data.error) ? (data.error.message || data.error.type) : (r.ok ? null : "HTTP " + r.status);
+    if(!err && data && Array.isArray(data.content)){
+      const txt = data.content.filter(b2=>b2.type === "text").map(b2=>b2.text).join("\n").trim();
+      if(txt){ AI_OFF = ""; return txt; }
+      last = "boş yanıt";
+    } else {
+      last = err || (raw ? "yanıt okunamadı" : "boş yanıt");
+    }
+    if(r && (r.status === 429 || /rate|limit|quota|credit/i.test(last))){
+      AI_OFF = "kota doldu";
+      throw new Error("kullanım sınırına takıldı — sınır sıfırlanınca tekrar dene");
+    }
+    if(!r || r.status >= 500 || /overload|boş yanıt|okunamadı/i.test(last)){ await wait(700 * (k+1)); continue; }
+    break;
+  }
+  AI_OFF = last;
+  throw new Error(last);
+}
+
+function parseJSON(txt){
+  let t = (txt||"").replace(/```json|```/g,"").trim();
+  const a = t.indexOf("{"), b = t.lastIndexOf("}"), c = t.indexOf("["), d = t.lastIndexOf("]");
+  let cut = null;
+  if(c > -1 && (c < a || a === -1)) cut = d > c ? t.slice(c, d+1) : t.slice(c);
+  else if(a > -1) cut = b > a ? t.slice(a, b+1) : t.slice(a);
+  if(!cut) throw new Error("JSON yok");
+  cut = cut.replace(/,\s*([}\]])/g, "$1");
+  try{ return JSON.parse(cut); }catch(e){}
+  return JSON.parse(closeJSON(cut));
+}
+
+/* yarıda kesilmiş JSON'u kapatır: açık parantezleri yığında tutar */
+function closeJSON(str){
+  const stack = [];
+  let inStr = false, esc = false;
+  for(const ch of str){
+    if(inStr){
+      if(esc) esc = false;
+      else if(ch === "\\") esc = true;
+      else if(ch === '"') inStr = false;
+      continue;
+    }
+    if(ch === '"') inStr = true;
+    else if(ch === "{" || ch === "[") stack.push(ch);
+    else if(ch === "}" || ch === "]") stack.pop();
+  }
+  let out = str;
+  if(inStr) out += '"';
+  out = out.replace(/,?\s*"[^"]*"\s*:\s*$/, "").replace(/,\s*$/, "");
+  while(stack.length) out += (stack.pop() === "{" ? "}" : "]");
+  return out.replace(/,\s*([}\]])/g, "$1");
+}
+
+const LANG = { de:"Almanca", en:"İngilizce", fr:"Fransızca", es:"İspanyolca", it:"İtalyanca", pt:"Portekizce",
+  nl:"Felemenkçe", sv:"İsveççe", da:"Danca", no:"Norveççe", fi:"Fince", pl:"Lehçe", cs:"Çekçe", sk:"Slovakça",
+  hu:"Macarca", ro:"Romence", bg:"Bulgarca", sr:"Sırpça", hr:"Hırvatça", uk:"Ukraynaca", ru:"Rusça", el:"Yunanca",
+  la:"Latince", ar:"Arapça", fa:"Farsça", he:"İbranice", hi:"Hintçe", zh:"Çince", ja:"Japonca", ko:"Korece",
+  id:"Endonezce", vi:"Vietnamca", tr:"Türkçe", auto:"kaynak dil" };
+function TGT(){ return LANG[S.tgt] || "Türkçe"; }
+const MM_TRY = ["de","en","fr","es","it","nl","pt","ru"];
+
+let MM_OFF = "";
+async function mmOne(text, src){
+  let r;
+  try{
+    r = await fetch("https://api.mymemory.translated.net/get?q=" + encodeURIComponent(text) + "&langpair=" + src + "|" + S.tgt);
+  }catch(e){
+    MM_OFF = "tarayıcı bu servise erişimi engelliyor";
+    throw new Error(MM_OFF);
+  }
+  const j = await r.json();
+  const t = j && j.responseData && j.responseData.translatedText;
+  if(!t || /MYMEMORY WARNING|INVALID|QUERY LENGTH/i.test(t)) throw new Error("karşılık bulunamadı");
+  MM_OFF = "";
+  return t;
+}
+async function mmChunk(text){
+  const srcs = S.src === "auto" ? MM_TRY : [S.src];
+  try{
+    return await Promise.race([
+      Promise.any(srcs.filter(x=>x !== S.tgt).map(s=>mmOne(text, s))),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error("zaman aşımı")), 9000))
+    ]);
+  }catch(e){ throw new Error(MM_OFF || errMsg(e) || "karşılık bulunamadı"); }
+}
+function chunks(text, max){
+  const parts = text.replace(/([.!?…:;])\s+/g, "$1\u0001").split(/[\u0001\n]/);
+  const out = []; let cur = "";
+  parts.forEach(p=>{
+    if((cur + " " + p).length > max){ if(cur.trim()) out.push(cur.trim()); cur = p; }
+    else cur += " " + p;
+    while(cur.length > max){ out.push(cur.slice(0,max)); cur = cur.slice(max); }
+  });
+  if(cur.trim()) out.push(cur.trim());
+  return out.filter(Boolean);
+}
+async function mmText(text){
+  const out = [];
+  for(const c of chunks(text, 440)){ try{ out.push(await mmChunk(c)); }catch(e){ out.push("[çevrilemedi]"); } }
+  return out.join(" ");
+}
+async function translateText(text){
+  if(S.engine === "mm") return mmText(text);
+  const sys = "Sen profesyonel bir çevirmensin. Verilen " + LANG[S.src] + " metni akıcı, doğal " + TGT() + " diline çevir. " +
+              "Sadece çeviriyi yaz; açıklama, başlık veya not ekleme.";
+  try{
+    const out = [];
+    for(const c of chunks(text, 1800)) out.push(await ai(sys, c));
+    return out.join("\n");
+  }catch(e){ return mmText(text); }
+}
+</script>
+<script>
+/* ================= SAYFA ÇEVİRİSİ ================= */
+function panePage(){
+  const b = $("#sheetBody");
+  if(!S.doc){ b.innerHTML = '<p class="hint">Önce bir PDF aç.</p>'; return; }
+  b.innerHTML = '<button class="btn wide" id="pgGo">Sayfa ' + S.page + ' — tamamını çevir</button>' +
+                '<div style="height:14px"></div><div id="pgOut"><p class="hint">Çeviri burada görünecek; altında özgün metin de olur.</p></div>';
+  $("#pgGo").onclick = async ()=>{
+    const txt = pageText();
+    if(!txt.trim()) return toast("Bu sayfada metin yok (taranmış görüntü olabilir).", 4000);
+    if(S.busy) return toast("Bir işlem sürüyor.");
+    S.busy = true; const t = work("Sayfa çevriliyor…");
+    try{
+      const tr = await translateText(txt);
+      $("#pgOut").innerHTML = '<div class="trg" style="font-size:15px;white-space:pre-wrap">' + esc(tr) + '</div>' +
+        '<div class="kv" style="margin-top:16px"><h4>ÖZGÜN METİN</h4>' +
+        '<p class="src" style="white-space:pre-wrap;color:var(--mut)">' + esc(txt) + '</p></div>';
+    }catch(e){ toast("Çeviri başarısız: " + e.message, 4000); }
+    done(t); S.busy = false;
+  };
+}
+
+/* ================= SATIR ÇEVİRİSİ ================= */
+function paneLines(){
+  const b = $("#sheetBody");
+  if(!S.lines.length){
+    b.innerHTML = '<p class="hint">Bu sayfada seçilebilir metin yok. Taranmış bir sayfaysa metni görüntüden çıkarabilirim.</p>' +
+      '<div style="height:10px"></div><button class="btn wide" id="lnOcr">Metni çıkar (OCR)</button>';
+    $("#lnOcr").onclick = ()=>ocrPage(false);
+    return;
+  }
+  const saved = new Set(S.cards.map(c=>c.word.toLowerCase()));
+  const words = txt => txt.split(/(\s+)/).map(p=>{
+    if(!/\S/.test(p)) return p;
+    return '<span class="w2' + (saved.has(clean(p).toLowerCase()) ? ' saved' : '') + '">' + esc(p) + '</span>';
+  }).join("");
+  b.innerHTML = '<button class="btn wide" id="lnAll">Bu sayfanın tüm satırlarını çevir</button>' +
+    '<p class="hint" style="margin:10px 0 12px">Kelimeye dokun → sözlük kartı. <b>TR</b> → o satırın çevirisi. 🔊 → dinle.</p>' +
+    '<div id="lnBox">' + S.lines.map((l,i)=>
+      '<div class="lrow" data-i="' + i + '"><div class="src"><span class="num">' + (i+1) + '</span>' +
+      '<button class="say" data-say="' + esc(l.text) + '">🔊</button>' +
+      '<button class="tbtn" data-go="' + i + '">TR</button>' + words(l.text) + '</div>' +
+      '<div class="trg" data-tr="' + i + '">' + (l.tr ? esc(l.tr) : "") + '</div></div>').join("") + '</div>';
+
+  $("#lnBox").onclick = async e=>{
+    if(e.target.closest(".say")) return;
+    const w = e.target.closest(".w2");
+    if(w){
+      const row = e.target.closest(".lrow");
+      const word = clean(w.textContent);
+      if(word) tryOpenWord(word, S.lines[+row.dataset.i].text, w);
+      return;
+    }
+    const g = e.target.closest("[data-go]"); if(!g) return;
+    const i = +g.dataset.go, l = S.lines[i];
+    const cell = document.querySelector('[data-tr="' + i + '"]');
+    if(l.tr){ cell.textContent = l.tr; return; }
+    cell.textContent = "çevriliyor…";
+    try{ l.tr = await translateText(l.text); cell.textContent = l.tr; cacheSave(); }
+    catch(err){ cell.textContent = "çevrilemedi"; }
+  };
+  $("#lnAll").onclick = lnAll;
+}
+async function lnAll(){
+  if(S.busy) return toast("Bir işlem sürüyor.");
+  S.busy = true;
+  const todo = S.lines.map((l,i)=>({l,i})).filter(x=>!x.l.tr);
+  const t = work("0 / " + todo.length + " satır");
+  const paint = ()=> S.lines.forEach((l,i)=>{
+    const c = document.querySelector('[data-tr="' + i + '"]'); if(c && l.tr) c.textContent = l.tr;
+  });
+  let n = 0;
+  if(S.engine === "ai"){
+    for(let k=0; k<todo.length; k+=12){
+      const part = todo.slice(k, k+12);
+      const sys = "Numarali satirlari " + TGT() + " diline cevir. SADECE JSON dizisi dondur: " +
+                  '[{"n":1,"tr":"..."}] — baska hicbir sey yazma.';
+      try{
+        parseJSON(await ai(sys, part.map((x,j)=>(j+1) + ". " + x.l.text).join("\n")))
+          .forEach(o=>{ const x = part[(o.n||0)-1]; if(x) x.l.tr = o.tr; });
+      }catch(e){
+        for(const x of part){ try{ x.l.tr = await mmChunk(x.l.text.slice(0,440)); }catch(e2){ x.l.tr = "[çevrilemedi]"; } }
+      }
+      n += part.length; t.innerHTML = '<span class="spin"></span>' + n + " / " + todo.length + " satır"; paint();
+    }
+  } else {
+    for(const x of todo){
+      try{ x.l.tr = await mmChunk(x.l.text.slice(0,440)); }catch(e){ x.l.tr = "[çevrilemedi]"; }
+      n++; t.innerHTML = '<span class="spin"></span>' + n + " / " + todo.length + " satır";
+      if(n % 4 === 0) paint();
+    }
+  }
+  paint(); cacheSave(); done(t); S.busy = false;
+}
+
+/* ================= KELİME KARTI ================= */
+document.getElementById("flow").addEventListener("click", e=>{
+  const w = e.target.closest(".w"); if(!w) return;
+  const slot = w.closest(".pg");
+  if(slot) FLOW.setPage(+slot.dataset.n, true);
+  document.querySelectorAll("#flow .w.act").forEach(x=>x.classList.remove("act"));
+  w.classList.add("act");
+  const word = clean(w.textContent); if(!word) return;
+  const line = (S.lines.find(l=>l.text.includes(w.textContent)) || {}).text || "";
+  tryOpenWord(word, line, w);
+});
+layer.onclick = e=>{
+  const w = e.target.closest(".w"); if(!w) return;
+  document.querySelectorAll("#layer .w.act").forEach(x=>x.classList.remove("act"));
+  w.classList.add("act");
+  const word = clean(w.textContent); if(!word) return;
+  const line = (S.lines.find(l=>l.text.includes(w.textContent)) || {}).text || "";
+  tryOpenWord(word, line, w);
+};
+$("#wClose").onclick = ()=> $("#word").classList.add("hide");
+
+const WC = {};            // kelime önbelleği
+let WORD_REQ = 0;
+
+async function openWord(word, context){
+  const id = ++WORD_REQ;
+  $("#word").classList.remove("hide");
+  $("#wWord").textContent = word;
+  $("#wPos").classList.add("hide");
+  $("#wordBody").innerHTML = '<p class="hint"><span class="spin"></span>anlam getiriliyor…</p>';
+  S.last = { word, context, data:null };
+
+  const key = S.src + ">" + S.tgt + "|" + word.toLowerCase();
+  if(WC[key]){ S.last.data = WC[key]; renderWord(word, WC[key], context); return; }
+
+  if(S.engine === "mm"){
+    try{
+      const tr = await mmChunk(word);
+      if(id !== WORD_REQ) return;
+      S.last.data = { anlam:tr };
+      $("#wordBody").innerHTML = '<div class="kv"><h4>ANLAM</h4><p class="big">' + esc(tr) + '</p></div>' +
+        (context ? '<div class="kv"><h4>GEÇTİĞİ SATIR</h4><p class="ex" style="color:var(--mut)">' + esc(context) + '</p></div>' : "");
+    }catch(e){ if(id === WORD_REQ) wordFail(word, context, "kapalı (hızlı sözlük seçili)", errMsg(e)); }
+    return;
+  }
+
+  // 1. adım: hızlı karşılık (birkaç saniye)
+  let quick = null;
+  const fastSys = "Sen " + LANG[S.src] + " sozluksun. Aciklamayi " + TGT() + " dilinde ver. SADECE JSON: " +
+    '{"anlam":"en yaygin karsilik","tur":"Verb|Nomen|Adjektiv|Adverb|diger","artikel":"der|die|das ya da bos","seviye":"A1|A2|B1|B2|C1"}';
+  try{
+    quick = parseJSON(await ai(fastSys, word));
+    if(id !== WORD_REQ) return;
+    S.last.data = quick;
+    renderWord(word, quick, context, true);
+  }catch(e){
+    var fastErr = errMsg(e);
+    if(/sınır|kota/i.test(fastErr)){ if(id === WORD_REQ) wordFail(word, context, fastErr, ""); return; }
+  }
+
+  // 2. adım: ayrıntılı kart
+  const sys = "Sen " + LANG[S.src] + " ogreten bir sozluksun. Aciklamalari " + TGT() + " dilinde yaz. " +
+    "SADECE JSON dondur, baska metin yazma. Sema:\n" +
+    '{"kelime":"","tur":"Verb|Nomen|Adjektiv|Adverb|Praposition","artikel":"der|die|das ya da bos",' +
+    '"anlam":"en yaygin karsilik","kok":"kok ve gercek anlami; ayrilabilir on ek ya da turetme yapisi",' +
+    '"baglam":"verilen cumledeki anlami","kaliplar":["kalip — karsiligi"],' +
+    '"ornekler":[{"x":"cumle","t":"cevirisi"}],"esanlam":["..."],"zit":["..."],' +
+    '"cekim":"fiilse er-formu: Prasens - Prateritum - Perfekt (ornek: lernt - lernte - hat gelernt), degilse bos",' +
+    '"cogul":"isimse cogul hali (die ...), degilse bos",' +
+    '"hal":"isimse dort hal: N der X / A den X / D dem X / G des Xes, degilse bos",' +
+    '"rektion":"fiil/sifat hangi edat ve hali aliyor (ornek: sich freuen auf + Akkusativ), yoksa bos",' +
+    '"ayrilabilir":"fiilse trennbar ya da untrennbar, degilse bos",' +
+    '"artis":"sifatsa Steigerung: positiv - komparativ - superlativ, degilse bos",' +
+    '"sorular":[{"x":"bu kelimeyle bir W-Frage","t":"cevirisi"},{"x":"bu kelimeyle bir Ja/Nein sorusu","t":"cevirisi"}],' +
+    '"karistirma":"sik karistirilan benzer kelime ve farki, yoksa bos",' +
+    '"kullanim":"gunluk konusma / resmi / yazi dili gibi kisa not",' +
+    '"seviye":"A1|A2|B1|B2|C1"}\n' +
+    "3 ornek ver: biri duz cumle, biri yan cumleli (weil/dass/wenn), biri gunluk konusma. " +
+    "3 esanlam, 2 kalip, 2 soru ver. Kisa ve net yaz.";
+  try{
+    const d = parseJSON(await ai(sys, "Kelime: " + word + (context ? "\nGectigi cumle: " + context.slice(0,240) : "")));
+    if(id !== WORD_REQ) return;
+    const full = Object.assign({}, quick || {}, d);
+    WC[key] = full; wcSave(); S.last.data = full;
+    renderWord(word, full, context);
+  }catch(e){
+    if(id !== WORD_REQ) return;
+    if(quick){
+      renderWord(word, quick, context);
+      toast("Ayrıntılar gelmedi: " + errMsg(e), 3500);
+      return;
+    }
+    let mmErr = "";
+    try{
+      const tr = await mmChunk(word);
+      if(id !== WORD_REQ) return;
+      S.last.data = { anlam:tr };
+      $("#wordBody").innerHTML = '<div class="kv"><h4>ANLAM</h4><p class="big">' + esc(tr) + '</p></div>';
+      return;
+    }catch(e2){ mmErr = errMsg(e2); }
+    wordFail(word, context, (typeof fastErr !== "undefined" ? fastErr : errMsg(e)), mmErr);
+  }
+}
+
+function wordFail(word, context, aiErr, mmErr){
+  $("#wordBody").innerHTML =
+    '<div class="kv"><h4>ÇEVİRİ YAPILAMADI</h4>' +
+    '<p>Yapay zekâ: ' + esc(aiErr || "bilinmiyor") + '</p>' +
+    (mmErr ? '<p style="margin-top:6px">Yedek sözlük: ' + esc(mmErr) + '</p>' : "") + '</div>' +
+    '<button class="btn wide" id="wRetry">Tekrar dene</button>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="wDiag">Bağlantıyı test et</button>';
+  $("#wRetry").onclick = ()=> openWord(word, context);
+  $("#wDiag").onclick = diagUI;
+}
+
+function renderWord(word, d, context, partial){
+  $("#wWord").textContent = (d.artikel ? d.artikel + " " : "") + word;
+  if(d.tur){ $("#wPos").textContent = d.tur + (d.seviye ? " · " + d.seviye : ""); $("#wPos").classList.remove("hide"); }
+  let h = '<div class="kv"><h4>EN YAYGIN ANLAM</h4><p class="big">' + esc(d.anlam||"—") + '</p></div>';
+  if(d.kok)    h += '<div class="kv"><h4>KÖK / GERÇEK ANLAM</h4><p>' + esc(d.kok) + '</p></div>';
+  if(d.cekim)  h += '<div class="kv"><h4>ÇEKİM (er-formu)</h4><p class="conj">' + esc(d.cekim) + '</p></div>';
+  if(d.ayrilabilir) h += '<div class="kv"><h4>AYRILABİLİRLİK</h4><p class="conj">' + esc(d.ayrilabilir) + '</p></div>';
+  if(d.cogul)  h += '<div class="kv"><h4>ÇOĞUL</h4><p class="conj">' + esc(d.cogul) + '</p></div>';
+  if(d.hal)    h += '<div class="kv"><h4>DÖRT HÂL</h4><p class="conj">' + esc(d.hal).replace(/ ?\/ ?/g, "<br>") + '</p></div>';
+  if(d.artis)  h += '<div class="kv"><h4>KARŞILAŞTIRMA</h4><p class="conj">' + esc(d.artis) + '</p></div>';
+  if(d.rektion) h += '<div class="kv"><h4>REKTION (edat + hâl)</h4><p class="conj">' + esc(d.rektion) + '</p></div>';
+  if(d.baglam) h += '<div class="kv"><h4>BU CÜMLEDEKİ ANLAMI</h4><p>' + esc(d.baglam) + '</p></div>';
+  if(context)  h += '<div class="kv"><h4>GEÇTİĞİ SATIR</h4><p class="ex" style="color:var(--mut)">' + esc(context) + '</p></div>';
+  if(d.kaliplar && d.kaliplar.length)
+    h += '<div class="kv"><h4>KALIP İFADELER</h4><p>' + d.kaliplar.map(esc).join("<br>") + '</p></div>';
+  if(d.ornekler && d.ornekler.length)
+    h += '<div class="kv"><h4>ÖRNEK CÜMLELER</h4>' + d.ornekler.map(o=>'<p class="ex"><button class="say" data-say="' + esc(o.x) + '">🔊</button>' + esc(o.x) + '</p><p class="ext">' + esc(o.t) + '</p>').join("") + '</div>';
+  if(d.sorular && d.sorular.length)
+    h += '<div class="kv"><h4>SORU BİÇİMLERİ</h4>' + d.sorular.map(o=>'<p class="ex"><button class="say" data-say="' + esc(o.x) + '">🔊</button>' + esc(o.x) + '</p><p class="ext">' + esc(o.t) + '</p>').join("") + '</div>';
+  if(d.karistirma)
+    h += '<div class="kv"><h4>KARIŞTIRMA</h4><p>' + esc(d.karistirma) + '</p></div>';
+  if(d.kullanim)
+    h += '<div class="kv"><h4>KULLANIM</h4><p>' + esc(d.kullanim) + '</p></div>';
+  if(d.esanlam && d.esanlam.length)
+    h += '<div class="kv"><h4>EŞ ANLAMLILAR</h4><p>' + d.esanlam.map(s=>'<span class="chip">' + esc(s) + '</span>').join("") + '</p></div>';
+  if(d.zit && d.zit.length)
+    h += '<div class="kv"><h4>ZIT ANLAMLILAR</h4><p>' + d.zit.map(s=>'<span class="chip">' + esc(s) + '</span>').join("") + '</p></div>';
+  if(partial) h += '<p class="hint"><span class="spin"></span>ayrıntılar, örnekler ve çekim geliyor…</p>';
+  $("#wordBody").innerHTML = h;
+}
+</script>
+<script>
+/* ================= KELİMELERİM ================= */
+const CKEY = "lingopdf:cards";
+async function loadCards(){ S.cards = (await store.get(CKEY)) || []; $("#cCount").textContent = S.cards.length; }
+async function saveCards(){ await store.set(CKEY, S.cards); $("#cCount").textContent = S.cards.length; }
+
+$("#wSave").onclick = async ()=>{
+  if(!S.last) return;
+  const { word, context, data } = S.last, d = data || {};
+  if(S.cards.some(c=>c.word.toLowerCase() === word.toLowerCase())) return toast("Bu kelime zaten kayıtlı.");
+  S.cards.unshift({
+    word, tr:d.anlam||"", artikel:d.artikel||"", tur:d.tur||"", seviye:d.seviye||"",
+    cekim:d.cekim||"", cogul:d.cogul||"", kok:d.kok||"",
+    ornek: (d.ornekler && d.ornekler[0]) ? d.ornekler[0].x : context,
+    ornekTr: (d.ornekler && d.ornekler[0]) ? d.ornekler[0].t : "",
+    esanlam: d.esanlam||[], kaynak: (S.name||"") + " s." + S.page, ts: Date.now()
+  });
+  await saveCards();
+  document.querySelectorAll("#layer .w, #lnBox .w2").forEach(sp=>{
+    if(clean(sp.textContent).toLowerCase() === word.toLowerCase()) sp.classList.add("saved");
+  });
+  toast("Kaydedildi: " + word);
+  if(S.tab === "cards") paneCards();
+};
+
+function paneCards(){
+  const b = $("#sheetBody");
+  let h = '<div class="row"><button class="btn sm" id="cdStudy">Çalış</button>' +
+          '<button class="btn gh sm" id="cdCsv">CSV</button>' +
+          '<button class="btn gh sm" id="cdAnki">Anki</button>' +
+          '<button class="btn gh sm" id="cdClear">Hepsini sil</button></div>' +
+          '<p class="stat">Bugün tekrar edilecek: ' + dueCount() + ' kelime · toplam ' + S.cards.length + '</p>';
+  h += S.cards.length
+    ? S.cards.map((c,i)=>'<div class="card"><div class="hd2"><div class="de">' +
+        esc((c.artikel ? c.artikel + " " : "") + c.word) + '</div><div class="tr">' + esc(c.tr) + '</div>' +
+        '<button class="x" data-del="' + i + '">×</button></div>' +
+        (c.cekim ? '<div class="meta conj">' + esc(c.cekim) + '</div>' : "") +
+        (c.ornek ? '<div class="meta">' + esc(c.ornek) + '</div>' : "") +
+        '<div class="meta" style="opacity:.65">' + esc(c.kaynak) + (c.seviye ? " · " + esc(c.seviye) : "") + '</div></div>').join("")
+    : '<p class="hint">Henüz kelime yok. Sayfada bir kelimeye dokun, açılan kartta “Kaydet”e bas.</p>';
+  b.innerHTML = h;
+  b.querySelectorAll("[data-del]").forEach(el=>el.onclick = async ()=>{
+    S.cards.splice(+el.dataset.del,1); await saveCards(); paneCards();
+  });
+  $("#cdClear").onclick = async ()=>{
+    if(!S.cards.length) return;
+    if(await ask("Kayıtlı tüm kelimeler silinsin mi?", "Hepsini sil")){ S.cards = []; await saveCards(); paneCards(); }
+  };
+  $("#cdCsv").onclick = ()=>{
+    if(!S.cards.length) return toast("Kelime yok.");
+    const q = v => '"' + String(v||"").replace(/"/g,'""') + '"';
+    const rows = [["kelime","artikel","turkce","tur","seviye","cekim","cogul","kok","ornek","ornek_tr","esanlam","kaynak"]]
+      .concat(S.cards.map(c=>[c.word,c.artikel,c.tr,c.tur,c.seviye,c.cekim,c.cogul,c.kok,c.ornek,c.ornekTr,(c.esanlam||[]).join("; "),c.kaynak]));
+    dl("kelimelerim.csv", new Blob(["\uFEFF" + rows.map(r=>r.map(q).join(",")).join("\n")], { type:"text/csv" }));
+  };
+  $("#cdAnki").onclick = ()=>{
+    if(!S.cards.length) return toast("Kelime yok.");
+    dl("kelimelerim-anki.txt", new Blob([S.cards.map(c=>
+      ((c.artikel ? c.artikel + " " : "") + c.word) + "\t" +
+      [c.tr,c.cekim,c.ornek,c.ornekTr].filter(Boolean).join("<br>")).join("\n")], { type:"text/plain" }));
+  };
+  $("#cdStudy").onclick = studySRS;
+}
+
+function study(){
+  if(!S.cards.length) return toast("Önce kelime kaydet.");
+  const deck = S.cards.slice().sort(()=>Math.random()-.5);
+  let i = 0;
+  const m = document.createElement("div"); m.className = "mask";
+  m.innerHTML = '<div class="modal"><h3>Çalış <span id="stI"></span></h3>' +
+    '<div class="mb" style="text-align:center;min-height:170px">' +
+    '<div id="stF" style="font-family:var(--read);font-size:30px;margin:16px 0"></div><div id="stB" class="hide"></div></div>' +
+    '<div class="mb" style="display:flex;gap:8px;border-top:1px solid var(--line)">' +
+    '<button class="btn gh" id="stFlip" style="flex:1">Göster</button>' +
+    '<button class="btn" id="stN" style="flex:1">Sonraki</button>' +
+    '<button class="btn gh" id="stX">Kapat</button></div></div>';
+  document.body.appendChild(m);
+  const draw = ()=>{
+    const c = deck[i];
+    m.querySelector("#stI").textContent = (i+1) + " / " + deck.length;
+    m.querySelector("#stF").textContent = (c.artikel ? c.artikel + " " : "") + c.word;
+    const b = m.querySelector("#stB");
+    b.classList.add("hide");
+    b.innerHTML = '<div style="font-size:20px;color:var(--or2);margin-bottom:8px">' + esc(c.tr) + '</div>' +
+      (c.cekim ? '<div class="conj">' + esc(c.cekim) + '</div>' : "") +
+      (c.ornek ? '<div class="ex" style="margin-top:8px">' + esc(c.ornek) + '</div>' : "") +
+      (c.ornekTr ? '<div class="ext">' + esc(c.ornekTr) + '</div>' : "");
+  };
+  m.querySelector("#stFlip").onclick = ()=> m.querySelector("#stB").classList.toggle("hide");
+  m.querySelector("#stN").onclick = ()=>{ i = (i+1) % deck.length; draw(); };
+  m.querySelector("#stX").onclick = ()=> m.remove();
+  draw();
+}
+</script>
+<script>
+/* ================= ARAÇLAR: ayarlar, parçalama, dönüştürme ================= */
+function paneTools(){
+  const b = $("#sheetBody");
+  b.innerHTML =
+    '<div class="row"><label>Belgenin dili</label><select id="tvLang">' +
+      Object.keys(LANG).filter(k=>k !== "auto").sort((a,b)=>LANG[a].localeCompare(LANG[b],"tr"))
+        .map(v=>'<option value="' + v + '"' + (S.src===v?" selected":"") + '>' + LANG[v] + '</option>').join("") +
+      '<option value="auto"' + (S.src==="auto"?" selected":"") + '>Otomatik bul</option>' +
+    '</select></div>' +
+    '<div class="row"><label>Çeviri dili</label><select id="tvTgt">' +
+      ["tr","en","de","fr","es","it","ru","ar"].map(v=>'<option value="' + v + '"' + (S.tgt===v?" selected":"") + '>' + LANG[v] + '</option>').join("") +
+    '</select></div>' +
+    '<div class="row"><label>Çeviri motoru</label><select id="tvEng">' +
+      '<option value="ai"' + (S.engine==="ai"?" selected":"") + '>Yapay zekâ (ayrıntılı)</option>' +
+      '<option value="mm"' + (S.engine==="mm"?" selected":"") + '>Hızlı sözlük (dış servis — engellenebilir)</option></select></div>' +
+    '<div style="height:10px"></div>' +
+    '<button class="btn wide" id="tvSave">Açık PDF’i kitaplığa kaydet</button>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="tvSplit">PDF’i parçala</button>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="tvConv">Başka biçime dönüştür</button>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="tvFind">Belgede kelime ara</button>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="tvOcr">Bu sayfayı OCR ile oku</button>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="tvPrint">PDF’i yazdır</button>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="tvSign">PDF’i imzala</button>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="tvNotePdf">Notlu PDF indir</button>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="tvPages">Sayfaları düzenle (döndür, sil, sırala)</button>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="tvMerge">Başka PDF ekle / birleştir</button>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="tvStamp">Filigran / sayfa numarası ekle</button>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="tvToc">İçindekiler / yer imleri</button>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="tvDiag">Bağlantıyı test et</button>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="tvHelp">Nasıl kullanılır</button>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="tvSelf">Kendini sına (sorun bildirimi)</button>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="tvKey">Çeviri bağlantısı: ' +
+      (API_PROV === "gemini" ? "Google Gemini ✓" : API_PROV === "anthropic" ? "Anthropic ✓" : "ortamın bağlantısı") + '</button>' +
+    '<div style="height:14px"></div><p class="stat">Dil çalışması</p>' +
+    '<button class="btn wide" id="tvHard">Bu sayfadaki zor kelimeler</button>' +
+    '<div style="height:8px"></div><label class="lb">Alıştırma seviyesi ve sayısı</label>' +
+    '<div class="opt" id="tvLvl">' + ["A2","B1","B2","C1"].map(x=>
+      '<button data-l="' + x + '"' + (QUIZ_LVL === x ? ' class="on"' : "") + '>' + x + '</button>').join("") + '</div>' +
+    '<div style="height:6px"></div><div class="opt" id="tvNum">' + [6,10,15].map(n=>
+      '<button data-n="' + n + '"' + (QUIZ_N === n ? ' class="on"' : "") + '>' + n + ' soru</button>').join("") + '</div>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="tvQuiz">Sayfadan alıştırma üret</button>' +
+    '<div style="height:14px"></div><p class="stat">Yeni PDF oluştur</p>' +
+    '<button class="btn wide" id="tvScan">Kamerayla tara → PDF</button>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="tvImg">Resimlerden PDF yap</button>' +
+    '<p class="note">Parçalama: seçtiğin sayfalardan yeni PDF üretir. Dönüştürme: TXT, Markdown, HTML, JSON, PNG ve Türkçe çevirili dosyalar.</p>';
+  $("#tvLang").onchange = e => { S.src = e.target.value; delete TCACHE[ckey()]; };
+  $("#tvTgt").onchange  = e => { S.tgt = e.target.value; toast("Çeviri dili: " + TGT()); };
+  $("#tvEng").onchange  = e => S.engine = e.target.value;
+  $("#tvSave").onclick  = saveToLib;
+  $("#tvSplit").onclick = splitUI;
+  $("#tvConv").onclick  = convUI;
+  $("#tvFind").onclick  = findUI;
+  $("#tvOcr").onclick   = ()=>ocrPage(true);
+  $("#tvPrint").onclick = printUI;
+  $("#tvSign").onclick  = signUI;
+  $("#tvPages").onclick = pagesUI;
+  $("#tvToc").onclick   = tocUI;
+  $("#tvDiag").onclick  = diagUI;
+  $("#tvHelp").onclick  = helpUI;
+  $("#tvSelf").onclick  = selfTest;
+  $("#tvKey").onclick   = keyUI;
+  $("#tvHard").onclick  = hardWordsUI;
+  $("#tvQuiz").onclick  = quizUI;
+  document.querySelectorAll("#tvLvl button").forEach(b=>b.onclick = async ()=>{
+    QUIZ_LVL = b.dataset.l; await store.set("lingopdf:qlvl", QUIZ_LVL);
+    document.querySelectorAll("#tvLvl button").forEach(x=>x.classList.toggle("on", x === b));
+  });
+  document.querySelectorAll("#tvNum button").forEach(b=>b.onclick = async ()=>{
+    QUIZ_N = +b.dataset.n; await store.set("lingopdf:qnum", QUIZ_N);
+    document.querySelectorAll("#tvNum button").forEach(x=>x.classList.toggle("on", x === b));
+  });
+  $("#tvMerge").onclick = mergeUI;
+  $("#tvStamp").onclick = stampUI;
+  $("#tvNotePdf").onclick = exportNotedPdf;
+  $("#tvScan").onclick  = ()=>builderUI(true);
+  $("#tvImg").onclick   = ()=>builderUI(false);
+}
+
+function parseRange(str, max){
+  const out = new Set();
+  (str||"").split(/[,\s]+/).filter(Boolean).forEach(p=>{
+    const m = p.match(/^(\d+)\s*[-–]\s*(\d+)$/);
+    if(m){ for(let i=Math.max(1,+m[1]); i<=Math.min(max,+m[2]); i++) out.add(i); }
+    else { const n = parseInt(p); if(n>=1 && n<=max) out.add(n); }
+  });
+  return [...out].sort((a,b)=>a-b);
+}
+async function srcDoc(){ return PDFLib.PDFDocument.load(S.bytes, { ignoreEncryption:true }); }
+async function makePdf(src, pages){
+  const out = await PDFLib.PDFDocument.create();
+  (await out.copyPages(src, pages.map(n=>n-1))).forEach(p=>out.addPage(p));
+  return new Blob([await out.save()], { type:"application/pdf" });
+}
+function modal(html){
+  const m = document.createElement("div"); m.className = "mask";
+  m.innerHTML = '<div class="modal">' + html + '</div>';
+  document.body.appendChild(m);
+  m.addEventListener("click", e=>{ if(e.target === m) m.remove(); });
+  return m;
+}
+
+function splitUI(){
+  if(!S.doc) return toast("Önce bir PDF aç.");
+  const m = modal('<h3>PDF’i parçala — ' + S.pages + ' sayfa</h3><div class="mb">' +
+    '<div class="row"><label>Sayfalar</label><input type="text" id="spR" value="1-' + Math.min(5,S.pages) + '" placeholder="1-5, 8, 12-14"></div>' +
+    '<button class="btn wide" id="spOne">Seçili sayfaları tek PDF yap</button>' +
+    '<div style="height:14px"></div>' +
+    '<div class="row"><label>Her kaç sayfa</label><input type="number" id="spN" value="10" min="1"></div>' +
+    '<button class="btn gh wide" id="spC">Belgeyi bu boyutta parçala</button>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="spE">Her sayfayı ayrı PDF yap</button>' +
+    '<p class="note">Dosyalar sırayla iner; tarayıcı izin isterse onayla.</p>' +
+    '<div style="height:10px"></div><button class="btn gh wide" id="spX">Kapat</button></div>');
+  m.querySelector("#spX").onclick = ()=> m.remove();
+  m.querySelector("#spOne").onclick = async ()=>{
+    const pages = parseRange(m.querySelector("#spR").value, S.pages);
+    if(!pages.length) return toast("Geçerli sayfa aralığı yaz.");
+    const t = work("Hazırlanıyor…");
+    try{ dl(baseName() + "-s" + pages[0] + "-" + pages[pages.length-1] + ".pdf", await makePdf(await srcDoc(), pages)); toast(pages.length + " sayfa indirildi."); }
+    catch(e){ toast("Olmadı: " + e.message); }
+    done(t);
+  };
+  m.querySelector("#spC").onclick = async ()=>{
+    const n = Math.max(1, parseInt(m.querySelector("#spN").value) || 10);
+    const t = work("Parçalanıyor…");
+    try{
+      const src = await srcDoc();
+      for(let a=1; a<=S.pages; a+=n){
+        const pages = []; for(let i=a; i<Math.min(a+n, S.pages+1); i++) pages.push(i);
+        dl(baseName() + "-bolum" + Math.ceil(a/n) + ".pdf", await makePdf(src, pages));
+        await new Promise(r=>setTimeout(r,350));
+      }
+      toast("Bitti.");
+    }catch(e){ toast("Olmadı: " + e.message); }
+    done(t);
+  };
+  m.querySelector("#spE").onclick = async ()=>{
+    if(S.pages > 40 && !(await ask(S.pages + " ayrı dosya inecek. Devam edilsin mi?", "Devam"))) return;
+    const t = work("Sayfalar ayrılıyor…");
+    try{
+      const src = await srcDoc();
+      for(let i=1; i<=S.pages; i++){
+        dl(baseName() + "-s" + String(i).padStart(3,"0") + ".pdf", await makePdf(src, [i]));
+        await new Promise(r=>setTimeout(r,300));
+      }
+      toast("Bitti.");
+    }catch(e){ toast("Olmadı: " + e.message); }
+    done(t);
+  };
+}
+</script>
+<script>
+/* ---------- dönüştürme ---------- */
+async function extractPages(pages, t){
+  const out = [];
+  for(const n of pages){
+    if(t) t.innerHTML = '<span class="spin"></span>sayfa ' + n + " okunuyor";
+    const page = await S.doc.getPage(n);
+    const vp = page.getViewport({ scale:1 });
+    let ls = groupLines(await page.getTextContent(), vp).map(l=>l.text);
+    if(!ls.length && OCRC[n]) ls = OCRC[n].slice();
+    out.push({ n, lines: ls });
+  }
+  return out;
+}
+async function pagePng(n, scale){
+  const page = await S.doc.getPage(n), vp = page.getViewport({ scale });
+  const c = document.createElement("canvas");
+  c.width = vp.width; c.height = vp.height;
+  const x = c.getContext("2d");
+  x.fillStyle = "#fff"; x.fillRect(0,0,c.width,c.height);
+  await page.render({ canvasContext:x, viewport:vp }).promise;
+  return new Promise(res=>c.toBlob(res, "image/png"));
+}
+
+function convUI(){
+  if(!S.doc) return toast("Önce bir PDF aç.");
+  const m = modal('<h3>Başka biçime dönüştür</h3><div class="mb">' +
+    '<div class="row"><label>Sayfalar</label><input type="text" id="cvR" value="1-' + S.pages + '"></div>' +
+    '<div class="opt" id="cvF">' +
+      '<button data-f="txt" class="on">Düz metin .txt</button>' +
+      '<button data-f="md">Markdown .md</button>' +
+      '<button data-f="html">Web sayfası .html</button>' +
+      '<button data-f="json">Veri .json</button>' +
+      '<button data-f="png">Sayfa görüntüsü .png</button>' +
+      '<button data-f="trtxt">Türkçe çevirili .txt</button>' +
+      '<button data-f="trhtml">Çift sütun çevirili .html</button>' +
+    '</div><button class="btn wide" id="cvGo">Dönüştür ve indir</button>' +
+    '<p class="note">Çevirili biçimler satırları tek tek çevirir, uzun aralıklarda zaman alır. Taranmış PDF’lerde yalnızca PNG çalışır.</p>' +
+    '<div style="height:10px"></div><button class="btn gh wide" id="cvX">Kapat</button></div>');
+  let fmt = "txt";
+  m.querySelectorAll("#cvF button").forEach(b=>b.onclick = ()=>{
+    fmt = b.dataset.f;
+    m.querySelectorAll("#cvF button").forEach(x=>x.classList.toggle("on", x === b));
+  });
+  m.querySelector("#cvX").onclick = ()=> m.remove();
+  m.querySelector("#cvGo").onclick = async ()=>{
+    const pages = parseRange(m.querySelector("#cvR").value, S.pages);
+    if(!pages.length) return toast("Geçerli sayfa aralığı yaz.");
+    const t = work("Hazırlanıyor…");
+    try{
+      if(fmt === "png"){
+        for(const n of pages){
+          t.innerHTML = '<span class="spin"></span>sayfa ' + n + " görüntüye çevriliyor";
+          dl(baseName() + "-s" + String(n).padStart(3,"0") + ".png", await pagePng(n, 2));
+          await new Promise(r=>setTimeout(r,300));
+        }
+        done(t); return toast(pages.length + " görüntü indirildi.");
+      }
+      const data = await extractPages(pages, t);
+      const total = data.reduce((a,p)=>a + p.lines.length, 0);
+      if(!total){ done(t); return toast("Metin bulunamadı — bu PDF taranmış olabilir. PNG dene.", 4500); }
+
+      if(fmt === "txt"){
+        dl(baseName() + ".txt", new Blob([data.map(p=>"— Sayfa " + p.n + " —\n" + p.lines.join("\n")).join("\n\n")], { type:"text/plain" }));
+      } else if(fmt === "md"){
+        dl(baseName() + ".md", new Blob(["# " + baseName() + "\n\n" + data.map(p=>"## Sayfa " + p.n + "\n\n" + p.lines.join("\n\n")).join("\n\n")], { type:"text/markdown" }));
+      } else if(fmt === "json"){
+        dl(baseName() + ".json", new Blob([JSON.stringify({ dosya:S.name, sayfalar:data }, null, 2)], { type:"application/json" }));
+      } else if(fmt === "html"){
+        dl(baseName() + ".html", new Blob(['<!DOCTYPE html><meta charset="utf-8"><title>' + esc(baseName()) + '</title>' +
+          '<body style="max-width:42em;margin:40px auto;font:17px/1.6 Georgia,serif;padding:0 16px">' +
+          data.map(p=>'<h2 style="font:600 13px sans-serif;color:#888">Sayfa ' + p.n + '</h2>' +
+            p.lines.map(l=>"<p>" + esc(l) + "</p>").join("")).join("")], { type:"text/html" }));
+      } else {
+        const rows = []; let n = 0;
+        for(const p of data) for(const line of p.lines){
+          let tr = "";
+          try{ tr = await translateText(line); }catch(e){ tr = "[çevrilemedi]"; }
+          rows.push({ x:line, t:tr });
+          n++; t.innerHTML = '<span class="spin"></span>' + n + " / " + total + " satır çevriliyor";
+        }
+        if(fmt === "trtxt"){
+          dl(baseName() + "-cevirili.txt", new Blob([rows.map(r=>r.x + "\n→ " + r.t).join("\n\n")], { type:"text/plain" }));
+        } else {
+          dl(baseName() + "-cevirili.html", new Blob(['<!DOCTYPE html><meta charset="utf-8"><title>' + esc(baseName()) + '</title>' +
+            '<body style="font:16px/1.55 system-ui;max-width:1000px;margin:30px auto;padding:0 14px"><h1 style="font-size:20px">' +
+            esc(baseName()) + '</h1><table style="width:100%;border-collapse:collapse">' +
+            rows.map(r=>'<tr><td style="width:50%;padding:7px 10px;border-bottom:1px solid #eee;font-family:Georgia,serif">' + esc(r.x) +
+              '</td><td style="padding:7px 10px;border-bottom:1px solid #eee;color:#0a6b5e">' + esc(r.t) + '</td></tr>').join("") +
+            '</table>'], { type:"text/html" }));
+        }
+      }
+      toast("İndirildi.");
+    }catch(e){ toast("Olmadı: " + e.message, 4000); }
+    done(t);
+  };
+}
+
+/* ================= başlangıç ================= */
+(async function init(){
+  await loadCards();
+  await loadLib();
+  if(S.lib.length) toast("Kitaplığında " + S.lib.length + " PDF var — alttaki Kitaplık’tan aç.", 4000);
+})();
+</script>
+<script>
+/* ================= SESLENDİRME ================= */
+const TTS = { de:"de-DE", en:"en-US", fr:"fr-FR", es:"es-ES", it:"it-IT", nl:"nl-NL", ru:"ru-RU", ar:"ar-SA", auto:"de-DE" };
+let speaking = null;
+function speak(text, lang){
+  if(!("speechSynthesis" in window)) return toast("Bu cihaz seslendirmeyi desteklemiyor.");
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(String(text).slice(0, 600));
+  u.lang = lang || TTS[S.src] || (S.src === "auto" ? "de-DE" : S.src);
+  u.rate = .92;
+  speaking = u; speechSynthesis.speak(u);
+}
+document.addEventListener("click", e=>{
+  const b = e.target.closest(".say");
+  if(!b) return;
+  e.stopPropagation(); e.preventDefault();
+  speak(b.dataset.say);
+});
+$("#wSay").onclick = ()=>{ if(S.last) speak(S.last.word); };
+
+/* ================= ÇEVİRİ ÖNBELLEĞİ ================= */
+const TCACHE = {};
+function ckey(){ return (S.id || S.name) + "#" + S.page; }
+function cacheLoad(){
+  const c = TCACHE[ckey()]; if(!c) return;
+  S.lines.forEach(l=>{ if(c[l.text]) l.tr = c[l.text]; });
+}
+function cacheSave(){
+  const k = ckey(), c = TCACHE[k] || (TCACHE[k] = {});
+  S.lines.forEach(l=>{ if(l.tr) c[l.text] = l.tr; });
+}
+
+/* ================= GECE MODU ================= */
+let night = false;
+function applyNight(){
+  cv.classList.toggle("night", night);
+  document.querySelectorAll("#flow .pg").forEach(el=>el.classList.toggle("night", night));
+}
+$("#bNight").onclick = ()=>{
+  night = !night; applyNight();
+  $("#bNight").textContent = night ? "gündüz" : "gece";
+};
+
+/* ================= PARMAKLA SAYFA ÇEVİRME ================= */
+let tx0 = 0, ty0 = 0, tt0 = 0;
+viewer.addEventListener("touchstart", e=>{
+  if(e.touches.length !== 1) return;
+  tx0 = e.touches[0].clientX; ty0 = e.touches[0].clientY; tt0 = Date.now();
+}, { passive:true });
+viewer.addEventListener("touchend", e=>{
+  if(!e.changedTouches.length || Date.now() - tt0 > 600) return;
+  if(String(window.getSelection())) return;
+  const dx = e.changedTouches[0].clientX - tx0, dy = e.changedTouches[0].clientY - ty0;
+  if(S.flow) return;                       // dikey akışta yana kaydırma yok
+  if(Math.abs(dx) > 90 && Math.abs(dy) < 60) go(S.page + (dx < 0 ? 1 : -1));
+}, { passive:true });
+
+/* ================= SEÇİLEN METNİ ÇEVİR ================= */
+const selBtn = document.createElement("div");
+selBtn.id = "selBtn"; selBtn.className = "hide";
+selBtn.innerHTML = '<button data-a="tr">Seçimi çevir</button><button data-a="note">Not al</button>';
+document.body.appendChild(selBtn);
+function selText(){ return String(window.getSelection() || "").trim(); }
+["mouseup","touchend"].forEach(ev=>layer.addEventListener(ev, ()=>{
+  setTimeout(()=>{
+    const t = selText();
+    if(t.split(/\s+/).length < 2){ selBtn.classList.add("hide"); return; }
+    const r = window.getSelection().getRangeAt(0).getBoundingClientRect();
+    selBtn.style.left = Math.max(8, Math.min(innerWidth - 230, r.left + r.width/2 - 110)) + "px";
+    selBtn.style.top = Math.max(60, r.top - 46) + "px";
+    selBtn.style.position = "fixed";
+    selBtn.classList.remove("hide");
+  }, 60);
+}));
+document.addEventListener("scroll", ()=>selBtn.classList.add("hide"), true);
+selBtn.onclick = e=>{
+  const b = e.target.closest("[data-a]"); if(!b) return;
+  const t = selText(); selBtn.classList.add("hide");
+  if(!t) return;
+  if(b.dataset.a === "tr") openPhrase(t);
+  else editNote({ page:S.page, fx:.5, fy:.15, text:"", quote:t.slice(0,300), ts:Date.now() });
+};
+
+async function openPhrase(text){
+  $("#word").classList.remove("hide");
+  $("#wWord").textContent = text.length > 34 ? text.slice(0,34) + "…" : text;
+  $("#wPos").classList.add("hide");
+  $("#wordBody").innerHTML = '<p class="hint"><span class="spin"></span>cümle çözümleniyor…</p>';
+  S.last = { word:text, context:"", data:null };
+  if(S.engine === "mm"){
+    try{ const tr = await mmText(text); S.last.data = { anlam:tr };
+      $("#wordBody").innerHTML = '<div class="kv"><h4>ÇEVİRİ</h4><p class="big">' + esc(tr) + '</p></div>';
+    }catch(e){ $("#wordBody").innerHTML = '<p class="hint">Çevrilemedi.</p>'; }
+    return;
+  }
+  const sys = "Sen " + LANG[S.src] + " ogreten bir dil koclarisin. Aciklamalari " + TGT() + " dilinde yaz. SADECE JSON dondur. Sema:\n" +
+    '{"ceviri":"dogal Turkce ceviri","kelimeler":[{"k":"kelimenin metindeki hali","t":"Turkce karsiligi","n":"gorevi/notu"}],' +
+    '"yapi":"cumlenin dilbilgisi yapisi: zaman, cumle tipi, dikkat edilecek kural","kalip":"varsa kalip ifade ve anlami"}\n' +
+    "Kelime kelime cozumlemede metindeki tum anlamli kelimeleri sirayla ver.";
+  try{
+    const d = parseJSON(await ai(sys, text));
+    S.last.data = { anlam: d.ceviri };
+    let h = '<div class="kv"><h4>ÇEVİRİ</h4><p class="big">' + esc(d.ceviri||"") + '</p></div>' +
+      '<div class="kv"><h4>ÖZGÜN CÜMLE</h4><p class="ex"><button class="say" data-say="' + esc(text) + '">🔊</button>' + esc(text) + '</p></div>';
+    if(d.yapi)  h += '<div class="kv"><h4>CÜMLE YAPISI</h4><p>' + esc(d.yapi) + '</p></div>';
+    if(d.kalip) h += '<div class="kv"><h4>KALIP</h4><p>' + esc(d.kalip) + '</p></div>';
+    if(d.kelimeler && d.kelimeler.length)
+      h += '<div class="kv"><h4>KELİME KELİME</h4>' + d.kelimeler.map(w=>
+        '<p style="margin:0 0 5px"><b>' + esc(w.k) + '</b> — ' + esc(w.t) +
+        (w.n ? ' <span style="color:var(--mut)">(' + esc(w.n) + ')</span>' : "") + '</p>').join("") + '</div>';
+    $("#wordBody").innerHTML = h;
+  }catch(e){
+    try{ const tr = await mmText(text); $("#wordBody").innerHTML = '<div class="kv"><h4>ÇEVİRİ</h4><p class="big">' + esc(tr) + '</p></div>'; }
+    catch(e2){ $("#wordBody").innerHTML = '<p class="hint">Çevrilemedi. Tekrar dene.</p>'; }
+  }
+}
+</script>
+<script>
+/* ================= BELGEDE ARAMA ================= */
+async function findUI(){
+  if(!S.doc) return toast("Önce bir PDF aç.");
+  const m = modal('<h3>Belgede ara</h3><div class="mb">' +
+    '<div class="row"><input type="text" id="fdQ" placeholder="aranacak kelime"><button class="btn" id="fdGo">Ara</button></div>' +
+    '<div id="fdOut"><p class="hint">Tüm sayfalarda geçtiği yerleri bulur; sonuca dokununca o sayfaya gider.</p></div>' +
+    '<div style="height:10px"></div><button class="btn gh wide" id="fdX">Kapat</button></div>');
+  m.querySelector("#fdX").onclick = ()=> m.remove();
+  const run = async ()=>{
+    const q = m.querySelector("#fdQ").value.trim().toLowerCase();
+    if(q.length < 2) return toast("En az 2 harf yaz.");
+    const t = work("aranıyor…"), hits = [];
+    for(let n=1; n<=S.pages; n++){
+      t.innerHTML = '<span class="spin"></span>sayfa ' + n + " / " + S.pages;
+      const page = await S.doc.getPage(n);
+      const lines = groupLines(await page.getTextContent(), page.getViewport({ scale:1 }));
+      lines.forEach(l=>{ if(l.text.toLowerCase().includes(q)) hits.push({ n, text:l.text }); });
+      if(hits.length > 120) break;
+    }
+    done(t);
+    m.querySelector("#fdOut").innerHTML = hits.length
+      ? '<p class="stat">' + hits.length + ' sonuç</p>' + hits.map(h=>
+          '<div class="fres" data-n="' + h.n + '"><b>s.' + h.n + '</b> · ' + esc(h.text.slice(0,120)) + '</div>').join("")
+      : '<p class="hint">Sonuç yok.</p>';
+    m.querySelectorAll(".fres").forEach(el=>el.onclick = ()=>{ go(+el.dataset.n); m.remove(); });
+  };
+  m.querySelector("#fdGo").onclick = run;
+  m.querySelector("#fdQ").addEventListener("keydown", e=>{ if(e.key === "Enter") run(); });
+  m.querySelector("#fdQ").focus();
+}
+
+/* ================= ARALIKLI TEKRAR ================= */
+const STEPS = [0, 1, 2, 5, 10, 21];
+function dueCount(){
+  const now = Date.now();
+  return S.cards.filter(c=>!c.due || c.due <= now).length;
+}
+function studySRS(){
+  if(!S.cards.length) return toast("Önce kelime kaydet.");
+  const now = Date.now();
+  let deck = S.cards.filter(c=>!c.due || c.due <= now);
+  if(!deck.length){
+    const next = Math.min(...S.cards.map(c=>c.due || 0));
+    const saat = Math.max(1, Math.round((next - now)/3600000));
+    ask("Bugünlük tekrar bitti (sıradaki ~" + saat + " saat sonra). Yine de hepsini çalışayım mı?", "Hepsini çalış")
+      .then(y=>{ if(y){ srsRun(S.cards.slice()); } });
+    return;
+  }
+  srsRun(deck);
+}
+
+function srsRun(deck){
+  if(!deck.length) return;
+  deck.sort(()=>Math.random()-.5);
+  let i = 0;
+  const m = modal('<h3>Tekrar <span id="stI"></span></h3>' +
+    '<div class="mb" style="text-align:center;min-height:180px">' +
+    '<div id="stF" style="font-family:var(--read);font-size:30px;margin:14px 0"></div>' +
+    '<button class="btn gh sm" id="stSay">🔊 dinle</button>' +
+    '<div id="stB" class="hide" style="margin-top:12px"></div></div>' +
+    '<div class="mb" style="border-top:1px solid var(--line)">' +
+    '<button class="btn wide" id="stShow">Cevabı göster</button>' +
+    '<div class="srs hide" id="stRate"><button class="no">Bilmiyorum</button>' +
+    '<button class="hard">Zor</button><button class="ok">Biliyorum</button></div>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="stX">Bitir</button></div>');
+  const draw = ()=>{
+    const c = deck[i];
+    m.querySelector("#stI").textContent = (i+1) + " / " + deck.length;
+    m.querySelector("#stF").textContent = (c.artikel ? c.artikel + " " : "") + c.word;
+    m.querySelector("#stB").classList.add("hide");
+    m.querySelector("#stRate").classList.add("hide");
+    m.querySelector("#stShow").classList.remove("hide");
+    m.querySelector("#stB").innerHTML =
+      '<div style="font-size:21px;color:var(--or2);margin-bottom:8px">' + esc(c.tr) + '</div>' +
+      (c.cekim ? '<div class="conj">' + esc(c.cekim) + '</div>' : "") +
+      (c.kok ? '<div class="stat" style="margin-top:6px">' + esc(c.kok) + '</div>' : "") +
+      (c.ornek ? '<div class="ex" style="margin-top:8px">' + esc(c.ornek) + '</div>' : "") +
+      (c.ornekTr ? '<div class="ext">' + esc(c.ornekTr) + '</div>' : "") +
+      '<div class="stat">kutu ' + ((c.box||0)+1) + ' / 6</div>';
+  };
+  m.querySelector("#stSay").onclick = ()=> speak(deck[i].word);
+  m.querySelector("#stShow").onclick = ()=>{
+    m.querySelector("#stB").classList.remove("hide");
+    m.querySelector("#stRate").classList.remove("hide");
+    m.querySelector("#stShow").classList.add("hide");
+  };
+  m.querySelectorAll(".srs button").forEach(btn=>btn.onclick = async ()=>{
+    const c = deck[i];
+    if(btn.className === "no"){ c.box = 0; c.due = Date.now() + 600000; }
+    else if(btn.className === "hard"){ c.box = Math.max(0, (c.box||0)); c.due = Date.now() + 86400000; }
+    else { c.box = Math.min(5, (c.box||0) + 1); c.due = Date.now() + STEPS[c.box]*86400000; }
+    await saveCards();
+    i++;
+    if(i >= deck.length){ m.remove(); toast("Tekrar bitti — " + deck.length + " kelime."); if(S.tab === "cards") paneCards(); return; }
+    draw();
+  });
+  m.querySelector("#stX").onclick = ()=>{ m.remove(); if(S.tab === "cards") paneCards(); };
+  draw();
+}
+
+/* ================= KALDIĞIN YERDEN DEVAM ================= */
+$("#bResume").onclick = ()=>{ if(S.lib.length) openFromLib(S.lib[0].id); };
+(function watchLib(){
+  const b = $("#bResume");
+  setTimeout(()=>{
+    if(S.lib.length){
+      b.textContent = "Devam et: " + S.lib[0].name.replace(/\.pdf$/i,"").slice(0,26) + " (s." + (S.lib[0].page||1) + ")";
+      b.classList.remove("hide");
+    }
+  }, 900);
+})();
+</script>
+<script>
+/* ================= OCR (taranmış sayfalar) ================= */
+const OCRC = {};                     // sayfa no -> satır dizisi
+function ocrKey(){ return S.page; }
+
+function checkOcr(){
+  const bar = $("#ocrBar");
+  if(!S.doc){ bar.classList.add("hide"); return; }
+  if(S.lines.length){ bar.classList.add("hide"); return; }
+  if(OCRC[S.page]){
+    S.lines = OCRC[S.page].map(t=>({ text:t, tr:null }));
+    cacheLoad(); bar.classList.add("hide");
+    if(S.tab === "lines") paneLines();
+    return;
+  }
+  bar.classList.remove("hide");
+}
+$("#ocrGo").onclick = ()=>ocrPage(false);
+
+async function pageImage(n, part){
+  const page = await S.doc.getPage(n);
+  const vp = page.getViewport({ scale:2 });
+  const c = document.createElement("canvas");
+  c.width = vp.width; c.height = vp.height;
+  const x = c.getContext("2d");
+  x.fillStyle = "#fff"; x.fillRect(0,0,c.width,c.height);
+  await page.render({ canvasContext:x, viewport:vp }).promise;
+  if(part == null) return c.toDataURL("image/jpeg", .82);
+  const h = Math.ceil(c.height/2), o = document.createElement("canvas");
+  o.width = c.width; o.height = h + (part === 0 ? 40 : 0);
+  o.getContext("2d").drawImage(c, 0, part === 0 ? 0 : h - 40, c.width, o.height, 0, 0, c.width, o.height);
+  return o.toDataURL("image/jpeg", .82);
+}
+
+async function aiImage(system, prompt, dataUrl){
+  if(API_PROV === "gemini" && API_KEY) return gemini(system, prompt, dataUrl);
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method:"POST", headers: aiHeaders(),
+    body: JSON.stringify({
+      model:"claude-sonnet-4-6", max_tokens:1000, system,
+      messages:[{ role:"user", content:[
+        { type:"image", source:{ type:"base64", media_type:"image/jpeg", data: dataUrl.split(",")[1] } },
+        { type:"text", text: prompt }
+      ]}]
+    })
+  });
+  const raw = await r.text();
+  let d;
+  try{ d = JSON.parse(raw); }
+  catch(e){ const m = raw.match(/\{[\s\S]*\}/); if(!m) throw new Error("yanıt okunamadı"); d = JSON.parse(m[0]); }
+  if(d.error) throw new Error(d.error.message || "servis hatası");
+  return (d.content||[]).filter(b=>b.type === "text").map(b=>b.text).join("\n").trim();
+}
+
+async function ocrPage(force){
+  if(!S.doc) return toast("Önce bir PDF aç.");
+  if(S.busy) return toast("Bir işlem sürüyor.");
+  const n = S.page;
+  if(OCRC[n] && !force){ checkOcr(); return; }
+  S.busy = true;
+  const t = work("Sayfa okunuyor (1/2)…");
+  try{
+    const sys = "Goruntudeki metni oldugu gibi yaz. Her satiri ayri satir olarak ver. " +
+                "Ceviri yapma, yorum ekleme, basik eklemeler yapma. Sadece metni dondur. " +
+                "Metin yoksa bos dondur.";
+    const out = [];
+    for(let half=0; half<2; half++){
+      t.innerHTML = '<span class="spin"></span>sayfa okunuyor (' + (half+1) + '/2)…';
+      const img = await pageImage(n, half);
+      const txt = await aiImage(sys, "Bu görüntüdeki metni satır satır yaz.", img);
+      txt.split("\n").map(x=>x.trim()).filter(Boolean).forEach(l=>{
+        if(!out.length || out[out.length-1] !== l) out.push(l);
+      });
+    }
+    if(!out.length){ done(t); S.busy = false; return toast("Metin bulunamadı."); }
+    OCRC[n] = out;
+    if(S.page === n){
+      S.lines = out.map(x=>({ text:x, tr:null }));
+      $("#ocrBar").classList.add("hide");
+      if(S.tab === "lines") paneLines();
+    }
+    done(t); S.busy = false;
+    toast(out.length + " satır çıkarıldı. Satır sekmesinden çevirebilirsin.", 4000);
+    openTab("lines");
+  }catch(e){ done(t); S.busy = false; toast("OCR başarısız: " + e.message, 4500); }
+}
+</script>
+<script>
+/* ================= YAZDIRMA ================= */
+function printUI(){
+  if(!S.doc) return toast("Önce bir PDF aç.");
+  const m = modal('<h3>Yazdır — ' + S.pages + ' sayfa</h3><div class="mb">' +
+    '<div class="row"><label>Sayfalar</label><input type="text" id="prR" value="1-' + S.pages + '" placeholder="1-5, 8"></div>' +
+    '<button class="btn wide" id="prGo">Yazdır</button>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="prPdf">Yazdırmak için PDF indir</button>' +
+    '<p class="note">Yazdırma penceresi açılmazsa (bazı tarayıcılar engeller) PDF’i indirip cihazının yazdırma menüsünü kullan.</p>' +
+    '<div style="height:10px"></div><button class="btn gh wide" id="prX">Kapat</button></div>');
+  m.querySelector("#prX").onclick = ()=> m.remove();
+  m.querySelector("#prPdf").onclick = async ()=>{
+    const pages = parseRange(m.querySelector("#prR").value, S.pages);
+    if(!pages.length) return toast("Geçerli sayfa aralığı yaz.");
+    const t = work("PDF hazırlanıyor…");
+    try{ dl(baseName() + "-yazdir.pdf", await makePdf(await srcDoc(), pages)); toast("İndirildi."); }
+    catch(e){ toast("Olmadı: " + e.message); }
+    done(t);
+  };
+  m.querySelector("#prGo").onclick = async ()=>{
+    const pages = parseRange(m.querySelector("#prR").value, S.pages);
+    if(!pages.length) return toast("Geçerli sayfa aralığı yaz.");
+    if(pages.length > 30 && !(await ask(pages.length + " sayfa hazırlanacak, biraz sürebilir. Devam edilsin mi?", "Devam"))) return;
+    m.remove();
+    await printImages(pages);
+  };
+}
+
+async function printImages(pages){
+  const t = work("yazdırmaya hazırlanıyor…");
+  try{
+    const imgs = [];
+    for(const n of pages){
+      t.innerHTML = '<span class="spin"></span>sayfa ' + n + " / " + pages[pages.length-1];
+      imgs.push(await pageImage(n, null));
+    }
+    const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + esc(baseName()) + '</title>' +
+      '<style>@page{margin:8mm}html,body{margin:0;padding:0}' +
+      'img{width:100%;display:block;page-break-after:always;break-after:page}' +
+      'img:last-child{page-break-after:auto}</style></head><body>' +
+      imgs.map(u=>'<img src="' + u + '">').join("") + '</body></html>';
+    const f = document.createElement("iframe");
+    f.setAttribute("style", "position:fixed;right:0;bottom:0;width:1px;height:1px;opacity:0;border:0");
+    f.srcdoc = html;
+    f.onload = ()=>{
+      done(t);
+      try{ f.contentWindow.focus(); f.contentWindow.print(); }
+      catch(e){ toast("Tarayıcı yazdırmayı engelledi — “Yazdırmak için PDF indir”i kullan.", 5000); }
+      setTimeout(()=>f.remove(), 120000);
+    };
+    document.body.appendChild(f);
+  }catch(e){ done(t); toast("Olmadı: " + e.message, 4000); }
+}
+</script>
+<script>
+/* ========= RESİMDEN / TARAYARAK PDF OLUŞTURMA ========= */
+const shots = [];   // { url (jpeg dataURL), w, h }
+
+function fileToImage(file){
+  return new Promise((res, rej)=>{
+    const fr = new FileReader();
+    fr.onerror = ()=>rej(new Error("dosya okunamadı"));
+    fr.onload = ()=>{
+      const im = new Image();
+      im.onload = ()=>res(im);
+      im.onerror = ()=>rej(new Error("görüntü açılamadı"));
+      im.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+
+function processImage(im, scanMode){
+  const MAX = 1700;
+  const r = Math.min(1, MAX / Math.max(im.width, im.height));
+  const w = Math.round(im.width * r), h = Math.round(im.height * r);
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const x = c.getContext("2d");
+  x.fillStyle = "#fff"; x.fillRect(0,0,w,h);
+  x.drawImage(im, 0, 0, w, h);
+  if(scanMode){
+    const d = x.getImageData(0,0,w,h), a = d.data;
+    let sum = 0;
+    for(let i=0; i<a.length; i+=4){
+      const g = .299*a[i] + .587*a[i+1] + .114*a[i+2];
+      a[i] = a[i+1] = a[i+2] = g; sum += g;
+    }
+    const mean = sum / (a.length/4);
+    const lo = Math.max(0, mean - 55), hi = Math.min(255, mean + 35), span = Math.max(1, hi - lo);
+    for(let i=0; i<a.length; i+=4){
+      const v = Math.max(0, Math.min(255, ((a[i] - lo) / span) * 255));
+      a[i] = a[i+1] = a[i+2] = v;
+    }
+    x.putImageData(d, 0, 0);
+  }
+  return { url: c.toDataURL("image/jpeg", .86), w, h };
+}
+
+async function buildPdf(list, fit){
+  const doc = await PDFLib.PDFDocument.create();
+  const A4 = [595.28, 841.89], M = 24;
+  for(const it of list){
+    const bytes = unb64(it.url.split(",")[1]);
+    const img = await doc.embedJpg(bytes);
+    if(fit){
+      const page = doc.addPage(A4);
+      const s = Math.min((A4[0]-2*M)/img.width, (A4[1]-2*M)/img.height);
+      const w = img.width*s, h = img.height*s;
+      page.drawImage(img, { x:(A4[0]-w)/2, y:(A4[1]-h)/2, width:w, height:h });
+    } else {
+      const page = doc.addPage([img.width, img.height]);
+      page.drawImage(img, { x:0, y:0, width:img.width, height:img.height });
+    }
+  }
+  return doc.save();
+}
+
+function builderUI(camera){
+  shots.length = 0;
+  const m = modal('<h3>' + (camera ? "Kamerayla tara → PDF" : "Resimlerden PDF yap") + '</h3><div class="mb">' +
+    '<button class="btn wide" id="bdAdd">' + (camera ? "Fotoğraf çek" : "Resim seç") + '</button>' +
+    '<div class="thumbs" id="bdT"></div>' +
+    '<label class="sw"><input type="checkbox" id="bdScan"' + (camera ? " checked" : "") + '> Tarama görünümü (gri + kontrast)</label>' +
+    '<label class="sw"><input type="checkbox" id="bdFit"' + (camera ? "" : " checked") + '> A4 sayfaya yerleştir (kapalıysa resim boyutunda sayfa)</label>' +
+    '<div class="row"><label>Dosya adı</label><input type="text" id="bdName" value="belge"></div>' +
+    '<button class="btn wide" id="bdMake">PDF oluştur ve indir</button>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="bdOpen">Oluştur ve okuyucuda aç</button>' +
+    '<p class="note">' + (camera ? "Her fotoğraftan sonra düğmeye tekrar basarak sayfa ekle. Sıralamayı ok ile değiştir." :
+      "Birden fazla resim seçebilirsin; sıra listede göründüğü gibi olur.") + '</p>' +
+    '<div style="height:10px"></div><button class="btn gh wide" id="bdX">Kapat</button></div>');
+
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = "image/*"; inp.className = "hide";
+  if(camera) inp.setAttribute("capture", "environment"); else inp.multiple = true;
+  document.body.appendChild(inp);
+
+  const paint = ()=>{
+    m.querySelector("#bdT").innerHTML = shots.map((s2,i)=>
+      '<div class="thumb"><img src="' + s2.url + '"><span class="no">' + (i+1) + '</span>' +
+      '<button class="del" data-del="' + i + '">×</button>' +
+      (i > 0 ? '<button class="mv" data-up="' + i + '">↑</button>' : "") + '</div>').join("");
+    m.querySelectorAll("[data-del]").forEach(b=>b.onclick = ()=>{ shots.splice(+b.dataset.del,1); paint(); });
+    m.querySelectorAll("[data-up]").forEach(b=>b.onclick = ()=>{
+      const i = +b.dataset.up; const t2 = shots[i-1]; shots[i-1] = shots[i]; shots[i] = t2; paint();
+    });
+  };
+
+  inp.onchange = async e=>{
+    const files = [...e.target.files]; e.target.value = "";
+    if(!files.length) return;
+    const t = work("görüntü işleniyor…");
+    const scan = m.querySelector("#bdScan").checked;
+    for(const f of files){
+      try{ shots.push(processImage(await fileToImage(f), scan)); }
+      catch(err){ toast("Bir görüntü eklenemedi: " + err.message); }
+    }
+    done(t); paint();
+  };
+  m.querySelector("#bdAdd").onclick = ()=> inp.click();
+  m.querySelector("#bdX").onclick = ()=>{ inp.remove(); m.remove(); };
+
+  const make = async open=>{
+    if(!shots.length) return toast("Önce en az bir görüntü ekle.");
+    const t = work("PDF oluşturuluyor…");
+    try{
+      const name = (m.querySelector("#bdName").value.trim() || "belge").replace(/\.pdf$/i,"") + ".pdf";
+      const bytes = await buildPdf(shots, m.querySelector("#bdFit").checked);
+      if(open){
+        inp.remove(); m.remove();
+        await openBytes(new Uint8Array(bytes), name, null, 1);
+        done(t); closeSheet();
+        toast("Oluşturuldu. Kitaplığa kaydetmek için Araçlar → Kitaplığa kaydet.", 4500);
+        return;
+      }
+      dl(name, new Blob([bytes], { type:"application/pdf" }));
+      done(t); toast(shots.length + " sayfalık PDF indirildi.");
+    }catch(e){ done(t); toast("Olmadı: " + e.message, 4000); }
+  };
+  m.querySelector("#bdMake").onclick = ()=>make(false);
+  m.querySelector("#bdOpen").onclick = ()=>make(true);
+  paint();
+}
+</script>
+<script>
+/* ================= NOTLAR ================= */
+let notes = [], noting = false;
+function docKey(){ return S.id || S.name || "gecici"; }
+function nKey(){ return "lingopdf:notes:" + docKey(); }
+async function loadNotes(){ notes = (await store.get(nKey())) || []; }
+async function persistNotes(){ await store.set(nKey(), notes); }
+
+$("#bNote").onclick = ()=>{
+  if(!S.doc) return toast("Önce bir PDF aç.");
+  noting = !noting;
+  $("#stage").classList.toggle("noting", noting);
+  $("#bNote").textContent = noting ? "bitir" : "not";
+  if(noting) toast("Sayfada not bırakmak istediğin yere dokun.", 3500);
+};
+$("#stage").addEventListener("click", e=>{
+  if(!noting || e.target.closest(".pin")) return;
+  const r = $("#stage").getBoundingClientRect();
+  editNote({ page:S.page, fx:(e.clientX - r.left)/r.width, fy:(e.clientY - r.top)/r.height, text:"", quote:"", ts:Date.now() });
+});
+
+function renderPins(){
+  const box = $("#pins"); if(!box) return;
+  box.innerHTML = notes.filter(n=>n.page === S.page).map(n=>
+    '<div class="pin" style="left:' + (n.fx*100).toFixed(2) + '%;top:' + (n.fy*100).toFixed(2) + '%" data-ts="' + n.ts + '">' +
+    esc((n.text || n.quote || "not").slice(0,22)) + '</div>').join("");
+  box.querySelectorAll(".pin").forEach(el=>el.onclick = ev=>{
+    ev.stopPropagation();
+    const n = notes.find(x=>String(x.ts) === el.dataset.ts);
+    if(n) editNote(n);
+  });
+}
+
+function editNote(n){
+  const isNew = !notes.includes(n);
+  const m = modal('<h3>' + (isNew ? "Yeni not" : "Notu düzenle") + ' — s.' + n.page + '</h3><div class="mb">' +
+    (n.quote ? '<div class="note-it"><div class="q">' + esc(n.quote) + '</div></div>' : "") +
+    '<textarea id="ntT" placeholder="notun…">' + esc(n.text || "") + '</textarea>' +
+    '<div style="height:10px"></div><button class="btn wide" id="ntS">Kaydet</button>' +
+    '<div style="height:8px"></div><div class="row">' +
+    (isNew ? "" : '<button class="btn gh sm" id="ntD" style="flex:1">Sil</button>') +
+    '<button class="btn gh sm" id="ntX" style="flex:1">Vazgeç</button></div></div>');
+  const ta = m.querySelector("#ntT"); ta.focus();
+  m.querySelector("#ntX").onclick = ()=> m.remove();
+  m.querySelector("#ntS").onclick = async ()=>{
+    n.text = ta.value.trim();
+    if(!n.text && !n.quote) return m.remove();
+    if(isNew) notes.push(n);
+    await persistNotes(); renderPins();
+    if(S.tab === "notes") paneNotes();
+    m.remove(); toast("Not kaydedildi.");
+  };
+  if(!isNew) m.querySelector("#ntD").onclick = async ()=>{
+    notes.splice(notes.indexOf(n), 1);
+    await persistNotes(); renderPins();
+    if(S.tab === "notes") paneNotes();
+    m.remove(); toast("Not silindi.");
+  };
+}
+
+function paneNotes(){
+  const b = $("#sheetBody");
+  let h = '<div class="row"><button class="btn sm" id="noAdd">Bu sayfaya not ekle</button>' +
+          '<button class="btn gh sm" id="noTxt">Notları indir</button>' +
+          '<button class="btn gh sm" id="noPdf">Notlu PDF</button></div>' +
+          '<p class="stat">' + notes.length + ' not · ' + esc(S.name || "belge yok") + '</p>';
+  h += notes.length
+    ? notes.slice().sort((a,c)=>a.page - c.page || a.ts - c.ts).map(n=>
+        '<div class="note-it"><div class="stat">sayfa ' + n.page + '</div>' +
+        (n.quote ? '<div class="q">' + esc(n.quote) + '</div>' : "") +
+        '<div class="t">' + esc(n.text || "") + '</div><div class="b">' +
+        '<button class="btn gh sm" data-go="' + n.ts + '">Sayfaya git</button>' +
+        '<button class="btn gh sm" data-ed="' + n.ts + '">Düzenle</button></div></div>').join("")
+    : '<p class="hint">Not yok. Sayfa çubuğundaki <b>not</b> düğmesine basıp sayfada bir yere dokun, ya da metin seçip “Not al”a bas.</p>';
+  b.innerHTML = h;
+  $("#noAdd").onclick = ()=>{
+    if(!S.doc) return toast("Önce bir PDF aç.");
+    editNote({ page:S.page, fx:.5, fy:.12, text:"", quote:"", ts:Date.now() });
+  };
+  $("#noTxt").onclick = ()=>{
+    if(!notes.length) return toast("Not yok.");
+    const txt = notes.slice().sort((a,c)=>a.page - c.page).map(n=>
+      "— Sayfa " + n.page + " —" + (n.quote ? "\n\"" + n.quote + "\"" : "") + "\n" + (n.text||"")).join("\n\n");
+    dl(baseName() + "-notlar.txt", new Blob([txt], { type:"text/plain" }));
+  };
+  $("#noPdf").onclick = exportNotedPdf;
+  b.querySelectorAll("[data-go]").forEach(el=>el.onclick = ()=>{
+    const n = notes.find(x=>String(x.ts) === el.dataset.go); if(n){ go(n.page); closeSheet(); }
+  });
+  b.querySelectorAll("[data-ed]").forEach(el=>el.onclick = ()=>{
+    const n = notes.find(x=>String(x.ts) === el.dataset.ed); if(n) editNote(n);
+  });
+}
+</script>
+<script>
+/* ====== NOTLU PDF (notlar sayfaya işlenir) ====== */
+const TRMAP = { "ş":"s","Ş":"S","ı":"i","İ":"I","ğ":"g","Ğ":"G","ç":"c","Ç":"C","ö":"o","Ö":"O","ü":"u","Ü":"U","â":"a","Â":"A" };
+function ascii(t){ return String(t||"").replace(/[şŞıİğĞçÇöÖüÜâÂ]/g, c=>TRMAP[c] || c).replace(/[^\x20-\x7E\n]/g, ""); }
+function wrap(t, n){
+  const out = [];
+  String(t||"").split("\n").forEach(line=>{
+    let cur = "";
+    line.split(/\s+/).forEach(w=>{
+      if((cur + " " + w).trim().length > n){ out.push(cur.trim()); cur = w; } else cur += " " + w;
+    });
+    out.push(cur.trim());
+  });
+  return out.filter(x=>x.length);
+}
+
+async function exportNotedPdf(){
+  if(!S.doc) return toast("Önce bir PDF aç.");
+  if(!notes.length) return toast("Önce not ekle.");
+  const t = work("Notlu PDF hazırlanıyor…");
+  try{
+    const doc = await srcDoc();
+    const font = await doc.embedFont(PDFLib.StandardFonts.Helvetica);
+    const bold = await doc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+    const pages = doc.getPages();
+    const sorted = notes.slice().sort((a,c)=>a.page - c.page || a.ts - c.ts);
+    sorted.forEach((n,i)=>{
+      const pg = pages[n.page-1]; if(!pg) return;
+      const { width, height } = pg.getSize();
+      const x = n.fx * width, y = height - n.fy * height;
+      pg.drawCircle({ x, y, size:9, color:PDFLib.rgb(1,.48,.06), opacity:.92 });
+      pg.drawText(String(i+1), { x: x - (i > 8 ? 6 : 3), y: y - 4, size:10, font:bold, color:PDFLib.rgb(.15,.07,.02) });
+    });
+    let page = null, y = 0;
+    const newPage = ()=>{
+      page = doc.addPage([595.28, 841.89]); y = 790;
+      page.drawText(ascii("Notlar - " + baseName()), { x:48, y, size:14, font:bold, color:PDFLib.rgb(.05,.3,.45) });
+      y -= 26;
+    };
+    newPage();
+    sorted.forEach((n,i)=>{
+      const lines = []
+        .concat(["[" + (i+1) + "] Sayfa " + n.page])
+        .concat(n.quote ? wrap('"' + ascii(n.quote) + '"', 88) : [])
+        .concat(wrap(ascii(n.text), 88));
+      if(y - lines.length*14 < 60) newPage();
+      lines.forEach((ln,k)=>{
+        page.drawText(ln, { x:48, y, size: k === 0 ? 11 : 10, font: k === 0 ? bold : font,
+                            color: k === 0 ? PDFLib.rgb(.9,.45,.05) : PDFLib.rgb(.12,.12,.12) });
+        y -= 14;
+      });
+      y -= 8;
+    });
+    dl(baseName() + "-notlu.pdf", new Blob([await doc.save()], { type:"application/pdf" }));
+    done(t); toast(sorted.length + " not PDF’e işlendi.");
+  }catch(e){ done(t); toast("Olmadı: " + e.message, 4500); }
+}
+</script>
+<script>
+/* ================= İMZALAMA ================= */
+let sigData = null, placing = null;
+(async ()=>{ sigData = await store.get("lingopdf:sign"); })();
+
+function signUI(){
+  if(!S.doc) return toast("Önce bir PDF aç.");
+  const m = modal('<h3>PDF’i imzala</h3><div class="mb">' +
+    '<p class="stat">Parmağınla ya da fareyle imzanı çiz.</p>' +
+    '<canvas id="sigPad"></canvas>' +
+    '<div class="row" style="margin-top:10px"><button class="btn gh sm" id="sgClr" style="flex:1">Temizle</button>' +
+    (sigData ? '<button class="btn gh sm" id="sgOld" style="flex:1">Kayıtlı imzayı kullan</button>' : "") + '</div>' +
+    '<div class="row"><label>Sayfa</label><input type="number" id="sgPg" min="1" max="' + S.pages + '" value="' + S.page + '"></div>' +
+    '<div class="row"><label>Genişlik %</label><input type="number" id="sgW" min="8" max="80" value="28"></div>' +
+    '<button class="btn wide" id="sgPlace">İmzayı yerleştir (sayfaya dokun)</button>' +
+    '<p class="note">Yerleştirmeyi seçince sayfada imzanın geleceği yere dokunursun; sonra imzalı PDF iner.</p>' +
+    '<div style="height:10px"></div><button class="btn gh wide" id="sgX">Kapat</button></div>');
+
+  const pad = m.querySelector("#sigPad");
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  requestAnimationFrame(()=>{
+    pad.width = pad.clientWidth * dpr; pad.height = pad.clientHeight * dpr;
+    const c = pad.getContext("2d");
+    c.scale(dpr, dpr); c.fillStyle = "#fff"; c.fillRect(0,0,pad.clientWidth,pad.clientHeight);
+    c.lineWidth = 2.6; c.lineCap = "round"; c.lineJoin = "round"; c.strokeStyle = "#0d2230";
+  });
+  const c = pad.getContext("2d");
+  let drawing = false, empty = true;
+  const pos = e=>{
+    const r = pad.getBoundingClientRect();
+    const p = e.touches ? e.touches[0] : e;
+    return { x:p.clientX - r.left, y:p.clientY - r.top };
+  };
+  const start = e=>{ e.preventDefault(); drawing = true; empty = false; const q = pos(e); c.beginPath(); c.moveTo(q.x, q.y); };
+  const move  = e=>{ if(!drawing) return; e.preventDefault(); const q = pos(e); c.lineTo(q.x, q.y); c.stroke(); };
+  const end   = ()=>{ drawing = false; };
+  ["mousedown","touchstart"].forEach(ev=>pad.addEventListener(ev, start, { passive:false }));
+  ["mousemove","touchmove"].forEach(ev=>pad.addEventListener(ev, move, { passive:false }));
+  ["mouseup","mouseleave","touchend"].forEach(ev=>pad.addEventListener(ev, end));
+
+  m.querySelector("#sgClr").onclick = ()=>{
+    c.fillStyle = "#fff"; c.fillRect(0,0,pad.clientWidth,pad.clientHeight);
+    c.strokeStyle = "#0d2230"; empty = true;
+  };
+  if(sigData) m.querySelector("#sgOld").onclick = ()=>{
+    const im = new Image();
+    im.onload = ()=>{ c.drawImage(im, 0, 0, pad.clientWidth, pad.clientHeight); empty = false; };
+    im.src = sigData;
+  };
+  m.querySelector("#sgX").onclick = ()=> m.remove();
+  m.querySelector("#sgPlace").onclick = async ()=>{
+    if(empty) return toast("Önce imzanı çiz.");
+    const url = trimSig(pad);
+    sigData = url; await store.set("lingopdf:sign", url);
+    const pg = Math.max(1, Math.min(S.pages, parseInt(m.querySelector("#sgPg").value) || S.page));
+    const wp = Math.max(8, Math.min(80, parseInt(m.querySelector("#sgW").value) || 28));
+    m.remove();
+    if(pg !== S.page) await go(pg), await new Promise(r=>setTimeout(r, 400));
+    placing = { url, page:pg, wp };
+    $("#stage").classList.add("noting");
+    toast("İmzanın geleceği yere dokun.", 4000);
+  };
+}
+
+function trimSig(pad){
+  const w = pad.width, h = pad.height, d = pad.getContext("2d").getImageData(0,0,w,h).data;
+  let x0 = w, y0 = h, x1 = 0, y1 = 0;
+  for(let y=0; y<h; y++) for(let x=0; x<w; x++){
+    const i = (y*w + x)*4;
+    if(d[i] < 200 || d[i+1] < 200 || d[i+2] < 200){
+      if(x < x0) x0 = x; if(x > x1) x1 = x; if(y < y0) y0 = y; if(y > y1) y1 = y;
+    }
+  }
+  if(x1 <= x0 || y1 <= y0) return pad.toDataURL("image/png");
+  const pad2 = 8, o = document.createElement("canvas");
+  o.width = (x1-x0) + pad2*2; o.height = (y1-y0) + pad2*2;
+  const oc = o.getContext("2d");
+  oc.drawImage(pad, x0-pad2, y0-pad2, o.width, o.height, 0, 0, o.width, o.height);
+  const im = oc.getImageData(0,0,o.width,o.height), a = im.data;
+  for(let i=0; i<a.length; i+=4) if(a[i] > 215 && a[i+1] > 215 && a[i+2] > 215) a[i+3] = 0;   // beyazı şeffaf yap
+  oc.putImageData(im, 0, 0);
+  return o.toDataURL("image/png");
+}
+
+$("#stage").addEventListener("click", async e=>{
+  if(!placing) return;
+  const r = $("#stage").getBoundingClientRect();
+  const fx = (e.clientX - r.left)/r.width, fy = (e.clientY - r.top)/r.height;
+  const job = placing; placing = null;
+  $("#stage").classList.remove("noting");
+  const t = work("İmza uygulanıyor…");
+  try{
+    const doc = await srcDoc();
+    const page = doc.getPages()[job.page - 1];
+    const { width, height } = page.getSize();
+    const png = await doc.embedPng(unb64(job.url.split(",")[1]));
+    const w = width * job.wp/100, h = w * (png.height/png.width);
+    page.drawImage(png, { x: Math.max(0, fx*width - w/2), y: Math.max(0, height - fy*height - h/2), width:w, height:h });
+    const bytes = await doc.save();
+    dl(baseName() + "-imzali.pdf", new Blob([bytes], { type:"application/pdf" }));
+    done(t); toast("İmzalı PDF indirildi.");
+  }catch(err){ done(t); toast("Olmadı: " + err.message, 4500); }
+}, true);
+</script>
+<script>
+/* ================= SAYFA YÖNETİMİ ================= */
+async function thumb(n, px){
+  const page = await S.doc.getPage(n);
+  const v1 = page.getViewport({ scale:1 });
+  const sc = (px || 130) / v1.width;
+  const vp = page.getViewport({ scale:sc });
+  const c = document.createElement("canvas");
+  c.width = vp.width; c.height = vp.height;
+  const x = c.getContext("2d");
+  x.fillStyle = "#fff"; x.fillRect(0,0,c.width,c.height);
+  await page.render({ canvasContext:x, viewport:vp }).promise;
+  return c.toDataURL("image/jpeg", .7);
+}
+
+async function pagesUI(){
+  if(!S.doc) return toast("Önce bir PDF aç.");
+  const order = Array.from({ length:S.pages }, (_,i)=>({ n:i+1, rot:0, del:false }));
+  const m = modal('<h3>Sayfaları düzenle</h3><div class="mb">' +
+    '<p class="stat">Küçük resme dokun → o sayfaya git. ↻ döndürür, × siler, ↑ öne alır.</p>' +
+    '<div class="thumbs" id="pgT"><p class="hint">küçük resimler hazırlanıyor…</p></div>' +
+    '<button class="btn wide" id="pgSave">Yeni PDF olarak indir</button>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="pgOpen">Değişikliği okuyucuda aç</button>' +
+    '<div style="height:10px"></div><button class="btn gh wide" id="pgX">Kapat</button></div>');
+  m.querySelector("#pgX").onclick = ()=> m.remove();
+
+  const imgs = {};
+  const t = work("küçük resimler…");
+  for(let i=1; i<=S.pages; i++){
+    t.innerHTML = '<span class="spin"></span>' + i + " / " + S.pages;
+    imgs[i] = await thumb(i, 150);
+    if(i > 60) break;
+  }
+  done(t);
+  const paint = ()=>{
+    m.querySelector("#pgT").innerHTML = order.map((o,i)=> o.del ? "" :
+      '<div class="thumb"><img src="' + (imgs[o.n]||"") + '" data-go="' + o.n + '" style="transform:rotate(' + o.rot + 'deg)">' +
+      '<span class="no">' + (i+1) + '</span><button class="del" data-x="' + i + '">×</button>' +
+      '<button class="mv" data-r="' + i + '">↻</button>' +
+      (i > 0 ? '<button class="mv" style="bottom:4px;left:4px;right:auto" data-u="' + i + '">↑</button>' : "") + '</div>').join("");
+    m.querySelectorAll("[data-go]").forEach(el=>el.onclick = ()=>{ go(+el.dataset.go); });
+    m.querySelectorAll("[data-x]").forEach(el=>el.onclick = ()=>{ order[+el.dataset.x].del = true; paint(); });
+    m.querySelectorAll("[data-r]").forEach(el=>el.onclick = ()=>{ const o = order[+el.dataset.r]; o.rot = (o.rot + 90) % 360; paint(); });
+    m.querySelectorAll("[data-u]").forEach(el=>el.onclick = ()=>{
+      const i = +el.dataset.u, tmp = order[i-1]; order[i-1] = order[i]; order[i] = tmp; paint();
+    });
+  };
+  paint();
+
+  const build = async ()=>{
+    const keep = order.filter(o=>!o.del);
+    if(!keep.length) throw new Error("hiç sayfa kalmadı");
+    const src = await srcDoc(), out = await PDFLib.PDFDocument.create();
+    const copied = await out.copyPages(src, keep.map(o=>o.n - 1));
+    copied.forEach((pg,i)=>{
+      const r = keep[i].rot;
+      if(r) pg.setRotation(PDFLib.degrees((pg.getRotation().angle + r) % 360));
+      out.addPage(pg);
+    });
+    return out.save();
+  };
+  m.querySelector("#pgSave").onclick = async ()=>{
+    const t2 = work("PDF hazırlanıyor…");
+    try{ dl(baseName() + "-duzenli.pdf", new Blob([await build()], { type:"application/pdf" })); toast("İndirildi."); }
+    catch(e){ toast("Olmadı: " + e.message); }
+    done(t2);
+  };
+  m.querySelector("#pgOpen").onclick = async ()=>{
+    const t2 = work("uygulanıyor…");
+    try{
+      const bytes = await build(); m.remove();
+      await openBytes(new Uint8Array(bytes), baseName() + "-duzenli.pdf", null, 1);
+      toast("Uygulandı. Kaydetmek için Araçlar → Kitaplığa kaydet.", 4500);
+    }catch(e){ toast("Olmadı: " + e.message); }
+    done(t2);
+  };
+}
+
+/* ================= BİRLEŞTİRME ================= */
+function mergeUI(){
+  if(!S.doc) return toast("Önce bir PDF aç.");
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = "application/pdf,.pdf"; inp.multiple = true; inp.className = "hide";
+  document.body.appendChild(inp);
+  inp.onchange = async e=>{
+    const files = [...e.target.files]; inp.remove();
+    if(!files.length) return;
+    const t = work("birleştiriliyor…");
+    try{
+      const out = await PDFLib.PDFDocument.create();
+      const base = await srcDoc();
+      (await out.copyPages(base, base.getPageIndices())).forEach(p=>out.addPage(p));
+      for(const f of files){
+        t.innerHTML = '<span class="spin"></span>' + f.name;
+        const d = await PDFLib.PDFDocument.load(new Uint8Array(await f.arrayBuffer()), { ignoreEncryption:true });
+        (await out.copyPages(d, d.getPageIndices())).forEach(p=>out.addPage(p));
+      }
+      const bytes = await out.save();
+      dl(baseName() + "-birlesik.pdf", new Blob([bytes], { type:"application/pdf" }));
+      done(t);
+      if(await ask("Birleşik PDF indi. Okuyucuda da açayım mı?", "Aç"))
+        await openBytes(new Uint8Array(bytes), baseName() + "-birlesik.pdf", null, 1);
+    }catch(err){ done(t); toast("Olmadı: " + err.message, 4500); }
+  };
+  inp.click();
+}
+
+/* ================= FİLİGRAN / SAYFA NUMARASI ================= */
+function stampUI(){
+  if(!S.doc) return toast("Önce bir PDF aç.");
+  const m = modal('<h3>Filigran / sayfa numarası</h3><div class="mb">' +
+    '<div class="row"><label>Filigran</label><input type="text" id="stW" placeholder="ör: TASLAK (boş bırakılabilir)"></div>' +
+    '<div class="row"><label>Koyuluk %</label><input type="number" id="stO" value="12" min="3" max="60"></div>' +
+    '<label class="sw"><input type="checkbox" id="stN" checked> Sayfa numarası ekle (alt ortada)</label>' +
+    '<button class="btn wide" id="stGo">Uygula ve indir</button>' +
+    '<p class="note">Türkçe/Almanca özel harfler standart yazı tipinde desteklenmediği için filigranda sadeleştirilir.</p>' +
+    '<div style="height:10px"></div><button class="btn gh wide" id="stX">Kapat</button></div>');
+  m.querySelector("#stX").onclick = ()=> m.remove();
+  m.querySelector("#stGo").onclick = async ()=>{
+    const wm = ascii(m.querySelector("#stW").value.trim());
+    const op = Math.max(.03, Math.min(.6, (parseInt(m.querySelector("#stO").value)||12)/100));
+    const nums = m.querySelector("#stN").checked;
+    if(!wm && !nums) return toast("Filigran yaz ya da sayfa numarasını seç.");
+    const t = work("uygulanıyor…");
+    try{
+      const doc = await srcDoc();
+      const font = await doc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+      doc.getPages().forEach((pg,i)=>{
+        const { width, height } = pg.getSize();
+        if(wm){
+          const size = Math.min(64, (width * 1.1) / Math.max(6, wm.length) * 1.6);
+          pg.drawText(wm, { x: width*.12, y: height*.42, size, font,
+                            color:PDFLib.rgb(.25,.25,.25), opacity:op, rotate:PDFLib.degrees(32) });
+        }
+        if(nums){
+          const lbl = String(i+1) + " / " + doc.getPageCount();
+          pg.drawText(lbl, { x: width/2 - font.widthOfTextAtSize(lbl, 9)/2, y: 18, size:9, font,
+                             color:PDFLib.rgb(.35,.35,.35), opacity:.85 });
+        }
+      });
+      dl(baseName() + "-damgali.pdf", new Blob([await doc.save()], { type:"application/pdf" }));
+      done(t); toast("İndirildi."); m.remove();
+    }catch(e){ done(t); toast("Olmadı: " + e.message, 4500); }
+  };
+}
+</script>
+<script>
+/* ========= PAROLALI PDF ========= */
+async function loadDoc(bytes){
+  let pw = null;
+  for(let i=0; i<4; i++){
+    try{
+      const task = pdfjsLib.getDocument(pw == null ? { data: bytes.slice(0) } : { data: bytes.slice(0), password: pw });
+      return await task.promise;
+    }catch(e){
+      const need = e && (e.name === "PasswordException" || /password/i.test(e.message||""));
+      if(!need) throw e;
+      pw = await askText(i === 0 ? "Bu PDF parola korumalı" : "Parola yanlış, tekrar dene", true);
+      if(pw == null) throw new Error("parola girilmedi");
+    }
+  }
+  throw new Error("parola doğrulanamadı");
+}
+
+/* ========= İÇİNDEKİLER ========= */
+async function tocUI(){
+  if(!S.doc) return toast("Önce bir PDF aç.");
+  const t = work("içindekiler okunuyor…");
+  let out = [];
+  try{
+    const ol = await S.doc.getOutline();
+    const walk = async (items, lvl)=>{
+      for(const it of (items||[])){
+        let pageNo = null;
+        try{
+          let dest = it.dest;
+          if(typeof dest === "string") dest = await S.doc.getDestination(dest);
+          if(dest && dest[0]) pageNo = (await S.doc.getPageIndex(dest[0])) + 1;
+        }catch(e){}
+        out.push({ title:it.title, page:pageNo, lvl });
+        if(it.items && it.items.length) await walk(it.items, lvl+1);
+      }
+    };
+    await walk(ol, 0);
+  }catch(e){}
+  done(t);
+  const m = modal('<h3>İçindekiler</h3><div class="mb">' +
+    (out.length
+      ? '<div id="tocL">' + out.map((o,i)=>'<div class="fres" data-n="' + (o.page||"") + '" style="padding-left:' + (10 + o.lvl*16) + 'px">' +
+          (o.page ? '<b>s.' + o.page + '</b> · ' : "") + esc(o.title) + '</div>').join("") + '</div>'
+      : '<p class="hint">Bu PDF’te gömülü içindekiler yok. Belgede arama ya da sayfa küçük resimleriyle gezinebilirsin.</p>') +
+    '<div style="height:10px"></div><button class="btn gh wide" id="tcX">Kapat</button></div>');
+  m.querySelector("#tcX").onclick = ()=> m.remove();
+  m.querySelectorAll(".fres").forEach(el=>el.onclick = ()=>{ if(el.dataset.n){ go(+el.dataset.n); m.remove(); } });
+}
+
+/* ========= ÇEKİM TABLOSU ========= */
+$("#wConj").onclick = async ()=>{
+  if(!S.last) return;
+  const w = S.last.word;
+  const body = $("#wordBody");
+  const old = body.innerHTML;
+  body.innerHTML = '<p class="hint"><span class="spin"></span>çekim tablosu hazırlanıyor…</p>';
+  const sys = "Sen " + LANG[S.src] + " dilbilgisi uzmanisin. SADECE JSON dondur. Sema:\n" +
+    '{"tip":"fiil|isim|sifat|diger","taban":"sozluk hali",' +
+    '"tablolar":[{"ad":"tablo adi","satirlar":[["etiket","bicim"]]}],"not":"kisa kural notu"}\n' +
+    "Fiilse: Prasens, Prateritum, Perfekt, Futur I, Konjunktiv II ve Imperativ tablolarini ver (ich/du/er/wir/ihr/sie). " +
+    "Isimse: artikel, cogul ve Nominativ-Akkusativ-Dativ-Genitiv hallerini ver. Sifatsa: karsilastirma ve cekim ozeti ver. " +
+    "Notu " + TGT() + " dilinde yaz.";
+  try{
+    const d = parseJSON(await ai(sys, w));
+    let h = '<div class="kv"><h4>' + esc((d.tip||"").toUpperCase()) + ' — ' + esc(d.taban||w) + '</h4></div>';
+    (d.tablolar||[]).forEach(tb=>{
+      h += '<div class="kv"><h4>' + esc(tb.ad||"") + '</h4><table style="width:100%;border-collapse:collapse">' +
+        (tb.satirlar||[]).map(r=>'<tr><td style="padding:3px 6px;color:var(--mut);width:38%">' + esc(r[0]) +
+          '</td><td style="padding:3px 6px" class="conj">' + esc(r[1]) + '</td></tr>').join("") + '</table></div>';
+    });
+    if(d.not) h += '<div class="kv"><h4>NOT</h4><p>' + esc(d.not) + '</p></div>';
+    h += '<button class="btn gh wide" id="wBack">← sözlük kartına dön</button>';
+    body.innerHTML = h;
+    $("#wBack").onclick = ()=>{ body.innerHTML = old; };
+  }catch(e){ body.innerHTML = old; toast("Çekim tablosu alınamadı.", 3500); }
+};
+</script>
+<script>
+/* ========= BAĞLANTI TESTİ ========= */
+async function diagUI(){
+  const m = modal('<h3>Bağlantı testi</h3><div class="mb"><div id="dgO">' +
+    '<p class="hint"><span class="spin"></span>deneniyor…</p></div>' +
+    '<div style="height:10px"></div><button class="btn gh wide" id="dgX">Kapat</button></div>');
+  m.querySelector("#dgX").onclick = ()=> m.remove();
+  const out = [];
+  try{
+    const t0 = Date.now();
+    const r = await ai("Sadece istenen kelimeyi yaz.", "Şu kelimeyi Türkçeye çevir, tek kelime yaz: Haus");
+    out.push(["Yapay zekâ çevirisi", "çalışıyor · " + ((Date.now()-t0)/1000).toFixed(1) + " sn · yanıt: " + r.slice(0,20), true]);
+  }catch(e){ out.push(["Yapay zekâ çevirisi", errMsg(e), false]); }
+  out.push(["Kalıcı depolama", store.kindName(), store.kind() !== "mem"]);
+  out.push(["Kullanılan bağlantı",
+    API_PROV === "gemini" ? "Google Gemini (kendi anahtarın)" :
+    API_PROV === "anthropic" ? "Anthropic (kendi anahtarın)" : "bulunduğu ortamın bağlantısı", true]);
+  if(API_PROV !== "gemini"){
+    try{
+      const rr = await fetch("https://api.anthropic.com/v1/messages", { method:"POST", headers: aiHeaders(),
+        body: JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:1000, messages:[{ role:"user", content:"ping" }] }) });
+      out.push(["Sunucuya erişim", "HTTP " + rr.status, rr.status < 400]);
+    }catch(e){ out.push(["Sunucuya erişim", "istek hiç gitmedi: " + errMsg(e), false]); }
+  }
+  out.push(["Cihaz ağı", navigator.onLine ? "bağlı görünüyor" : "çevrimdışı", !!navigator.onLine]);
+  try{
+    const r = await mmOne("Haus", "de");
+    out.push(["Yedek sözlük (MyMemory)", "çalışıyor (" + r.slice(0,24) + ")", true]);
+  }catch(e){ out.push(["Yedek sözlük (MyMemory)", e.message, false]); }
+  out.push(["Seslendirme", ("speechSynthesis" in window) ? "var" : "bu cihazda yok", ("speechSynthesis" in window)]);
+  out.push(["Kalıcı depolama", window.storage ? "açık" : "kapalı (kayıtlar oturumla sınırlı)", !!window.storage]);
+  const el = m.querySelector("#dgO");
+  if(!el) return;
+  el.innerHTML = out.map(o=>'<div class="note-it"><div class="t"><b style="color:' +
+      (o[2] ? "#BFF7DF" : "#FFC0B4") + '">' + (o[2] ? "✓" : "✕") + ' ' + esc(o[0]) + '</b><br>' + esc(o[1]) + '</div></div>').join("") +
+    '<p class="note">Yapay zekâ kotan dolduysa sınır sıfırlandığında kendiliğinden düzelir. Yedek sözlük engelliyse ' +
+    'bu ortam dış servislere izin vermiyor demektir; o durumda yapay zekâ motoru tek seçenek.</p>';
+}
+</script>
+<script>
+/* ========= KİTAPLIKTA ORTAK ARAMA ========= */
+async function libBytes(b, t){
+  let data = "";
+  for(let i=0; i<b.parts; i++){
+    if(t) t.innerHTML = '<span class="spin"></span>' + b.name.slice(0,18) + " — yükleniyor " + (i+1) + "/" + b.parts;
+    const part = await store.get("lingopdf:f:" + b.id + ":" + i);
+    if(part == null) throw new Error("parça eksik");
+    data += part;
+  }
+  return unb64(data);
+}
+
+async function libSearch(q){
+  if(!q || q.length < 2) return toast("En az 2 harf yaz.");
+  if(!S.lib.length) return toast("Kitaplık boş.");
+  const t = work("kitaplık taranıyor…");
+  const hits = [];
+  const low = q.toLowerCase();
+  try{
+    for(const b of S.lib){
+      let doc;
+      try{
+        const bytes = (S.id === b.id && S.bytes) ? S.bytes : await libBytes(b, t);
+        doc = await loadDoc(bytes);
+      }catch(e){ continue; }
+      const max = Math.min(doc.numPages, 300);
+      for(let n=1; n<=max; n++){
+        t.innerHTML = '<span class="spin"></span>' + b.name.slice(0,16) + " — s." + n + "/" + max;
+        const page = await doc.getPage(n);
+        const lines = groupLines(await page.getTextContent(), page.getViewport({ scale:1 }));
+        lines.forEach(l=>{
+          if(l.text.toLowerCase().includes(low)) hits.push({ id:b.id, name:b.name, n, text:l.text });
+        });
+        if(hits.length > 200) break;
+      }
+      if(hits.length > 200) break;
+    }
+  }catch(e){ toast("Tarama yarıda kaldı: " + e.message, 4000); }
+  done(t);
+  const box = $("#sheetBody");
+  box.innerHTML = '<button class="btn gh wide" id="lsBack">← kitaplığa dön</button>' +
+    '<p class="stat">“' + esc(q) + '” · ' + hits.length + ' sonuç</p>' +
+    (hits.length ? hits.map(h=>'<div class="fres" data-id="' + h.id + '" data-n="' + h.n + '">' +
+        '<b>' + esc(h.name.replace(/\.pdf$/i,"").slice(0,26)) + ' · s.' + h.n + '</b><br>' + esc(h.text.slice(0,140)) + '</div>').join("")
+      : '<p class="hint">Sonuç yok. Taranmış (görüntü) PDF’lerde metin katmanı olmadığı için arama çalışmaz.</p>');
+  $("#lsBack").onclick = paneLib;
+  box.querySelectorAll(".fres").forEach(el=>el.onclick = async ()=>{
+    const id = el.dataset.id, n = +el.dataset.n;
+    if(S.id === id){ go(n); closeSheet(); return; }
+    await openFromLib(id);
+    setTimeout(()=>go(n), 500);
+  });
+}
+</script>
+<script>
+/* ========= BU SAYFADAKİ ZOR KELİMELER ========= */
+async function hardWordsUI(){
+  if(!S.doc) return toast("Önce bir PDF aç.");
+  const txt = pageText();
+  if(!txt.trim()) return toast("Bu sayfada metin yok. Taranmışsa önce OCR yap.", 4000);
+  const m = modal('<h3>Bu sayfadaki zor kelimeler</h3><div class="mb">' +
+    '<div class="row"><label>Seviyeden itibaren</label><select id="hwL">' +
+      ["A2","B1","B2","C1"].map(v=>'<option value="' + v + '"' + (v === "B1" ? " selected" : "") + '>' + v + '</option>').join("") +
+    '</select><button class="btn sm" id="hwGo">Tara</button></div>' +
+    '<div id="hwO"><p class="hint">Sayfadaki kelimeler seviyeye göre ayıklanır; dokunduğun kelime kart olarak kaydedilir.</p></div>' +
+    '<div style="height:10px"></div><button class="btn gh wide" id="hwX">Kapat</button></div>');
+  m.querySelector("#hwX").onclick = ()=> m.remove();
+  m.querySelector("#hwGo").onclick = async ()=>{
+    const lvl = m.querySelector("#hwL").value;
+    const t = work("kelimeler ayıklanıyor…");
+    try{
+      const sys = "Sen " + LANG[S.src] + " ogretmenisin. Verilen metindeki " + lvl + " ve ustu seviyedeki " +
+        "onemli kelimeleri sec (en fazla 18 tane, cok temel kelimeleri alma). Aciklamalari " + TGT() + " dilinde yaz. " +
+        'SADECE JSON dondur: {"kelimeler":[{"k":"sozluk hali","a":"artikel ya da bos","t":"karsilik",' +
+        '"s":"A2|B1|B2|C1","c":"cekim ya da cogul, yoksa bos"}]}';
+      const d = parseJSON(await ai(sys, txt.slice(0, 2600)));
+      const list = d.kelimeler || [];
+      if(!list.length){ done(t); return toast("Bu seviyede kelime bulunamadı."); }
+      m.querySelector("#hwO").innerHTML =
+        '<button class="btn wide" id="hwAll">Hepsini kelimelerime ekle (' + list.length + ')</button>' +
+        '<div style="height:10px"></div>' +
+        list.map((w,i)=>'<div class="card"><div class="hd2"><div class="de">' + esc((w.a ? w.a + " " : "") + w.k) + '</div>' +
+          '<div class="tr">' + esc(w.t) + '</div><button class="btn sm" data-add="' + i + '">+</button></div>' +
+          '<div class="meta">' + esc(w.s || "") + (w.c ? " · " + esc(w.c) : "") + '</div></div>').join("");
+      const addOne = async w=>{
+        if(S.cards.some(c=>c.word.toLowerCase() === String(w.k).toLowerCase())) return false;
+        S.cards.unshift({ word:w.k, tr:w.t || "", artikel:w.a || "", tur:"", seviye:w.s || "",
+          cekim:w.c || "", cogul:"", kok:"", ornek:"", ornekTr:"", esanlam:[],
+          kaynak:(S.name||"") + " s." + S.page, ts:Date.now() + Math.floor(Math.random()*999) });
+        return true;
+      };
+      m.querySelectorAll("[data-add]").forEach(el=>el.onclick = async ()=>{
+        const ok = await addOne(list[+el.dataset.add]);
+        await saveCards(); el.textContent = ok ? "✓" : "zaten var";
+      });
+      m.querySelector("#hwAll").onclick = async ()=>{
+        let n = 0;
+        for(const w of list) if(await addOne(w)) n++;
+        await saveCards();
+        toast(n + " kelime eklendi.");
+        if(S.tab === "cards") paneCards();
+      };
+      done(t);
+    }catch(e){ done(t); toast("Olmadı: " + e.message, 4500); }
+  };
+}
+</script>
+<script>
+/* ========= SAYFADAN ALIŞTIRMA ========= */
+let QUIZ_N = 6, QUIZ_LVL = "B2";
+(async ()=>{
+  const l = await store.get("lingopdf:qlvl"), n = await store.get("lingopdf:qnum");
+  if(l) QUIZ_LVL = l; if(n) QUIZ_N = n;
+})();
+
+async function quizUI(){
+  if(!S.doc) return toast("Önce bir PDF aç.");
+  const txt = pageText();
+  if(txt.trim().length < 80) return toast("Alıştırma için sayfada yeterli metin yok.", 4000);
+  const t = work("alıştırma hazırlanıyor…");
+  let qs;
+  try{
+    const say = QUIZ_N, seviye = QUIZ_LVL;
+    const sys = "Sen " + LANG[S.src] + " ogretmenisin. Ogrencinin seviyesi " + seviye + ". " +
+      "Verilen metne dayanarak " + say + " soruluk alistirma hazirla. Sorulari SU TURLERE dagit ve her soruda " +
+      '"tur" alanini yaz: ' +
+      "'boşluk' (metindeki cumlede dogru bicimi sec), 'anlam' (kelimenin karsiligi), " +
+      "'dilbilgisi' (kural: hal, edat, zaman, siralama), 'çekim' (fiil cekimi ya da isim hali), " +
+      "'çeviri' (" + TGT() + " cumlenin " + LANG[S.src] + " karsiligini sec), 'soru' (dogru soru bicimini sec). " +
+      "Her turden en az bir soru olsun. Seviyeye uygun zorlukta yaz; " + seviye + " icin uygun yapilar kullan. " +
+      "Sorular ve secenekler " + LANG[S.src] + " dilinde, aciklamalar " + TGT() + " dilinde olsun. " +
+      "Aciklamada KURALI da yaz, sadece 'dogru cevap bu' deme. " +
+      'SADECE JSON dondur: {"sorular":[{"tur":"boşluk","q":"soru metni","o":["a","b","c","d"],"d":0,"x":"kural ve kisa aciklama"}]}';
+    qs = (parseJSON(await ai(sys, txt.slice(0, 2400))).sorular) || [];
+  }catch(e){ done(t); return toast("Olmadı: " + e.message, 4500); }
+  done(t);
+  if(!qs.length) return toast("Alıştırma üretilemedi.");
+
+  let i = 0, score = 0;
+  const m = modal('<h3>Alıştırma <span id="qzI"></span></h3><div class="mb">' +
+    '<p id="qzQ" class="src" style="margin:4px 0 14px"></p><div id="qzO"></div>' +
+    '<div id="qzX" class="hide" style="margin-top:12px"></div>' +
+    '<div style="height:12px"></div><button class="btn wide hide" id="qzN">Sonraki</button>' +
+    '<div style="height:8px"></div><button class="btn gh wide" id="qzC">Bitir</button></div>');
+  const draw = ()=>{
+    const q = qs[i];
+    m.querySelector("#qzI").textContent = (i+1) + " / " + qs.length;
+    m.querySelector("#qzQ").innerHTML = (q.tur ? '<span class="chip" style="margin-bottom:6px;display:inline-block">' +
+      esc(q.tur) + '</span><br>' : "") + esc(q.q);
+    m.querySelector("#qzX").classList.add("hide");
+    m.querySelector("#qzN").classList.add("hide");
+    m.querySelector("#qzO").innerHTML = (q.o||[]).map((o,k)=>
+      '<button class="btn gh wide" data-k="' + k + '" style="margin-bottom:8px;text-align:left">' + esc(o) + '</button>').join("");
+    m.querySelectorAll("[data-k]").forEach(b=>b.onclick = ()=>{
+      const k = +b.dataset.k, ok = k === q.d;
+      if(ok) score++;
+      m.querySelectorAll("[data-k]").forEach((x,idx)=>{
+        x.disabled = true;
+        if(idx === q.d) x.style.background = "rgba(90,240,180,.24)";
+        else if(idx === k) x.style.background = "rgba(255,120,110,.24)";
+      });
+      const xb = m.querySelector("#qzX");
+      xb.classList.remove("hide");
+      xb.innerHTML = '<div class="note-it"><div class="t"><b>' + (ok ? "Doğru" : "Yanlış — doğrusu: " + esc(q.o[q.d])) +
+        '</b>' + (q.x ? '<br>' + esc(q.x) : "") + '</div></div>';
+      m.querySelector("#qzN").classList.remove("hide");
+      m.querySelector("#qzN").textContent = (i === qs.length-1) ? "Sonucu gör" : "Sonraki";
+    });
+  };
+  m.querySelector("#qzN").onclick = ()=>{
+    if(i === qs.length-1){
+      m.querySelector(".mb").innerHTML =
+        '<p class="src" style="font-size:22px;text-align:center;margin:18px 0">' + score + ' / ' + qs.length + '</p>' +
+        '<p class="hint" style="text-align:center">' +
+        (score === qs.length ? "Tamamı doğru." : score >= qs.length/2 ? "Fena değil — yanlışları sayfada tekrar oku." : "Sayfayı satır satır çevirip tekrar dene.") +
+        '</p><div style="height:14px"></div><button class="btn gh wide" id="qzD">Kapat</button>';
+      m.querySelector("#qzD").onclick = ()=> m.remove();
+      return;
+    }
+    i++; draw();
+  };
+  m.querySelector("#qzC").onclick = ()=> m.remove();
+  draw();
+}
+</script>
+<script>
+/* ========= GÖMÜLÜ ORTAM İÇİN GÜVENLİ PENCERELER ========= */
+function ask(msg, okLabel){
+  return new Promise(res=>{
+    const m = modal('<h3>Onay</h3><div class="mb"><p style="line-height:1.55">' + esc(msg) + '</p>' +
+      '<div style="height:14px"></div><button class="btn wide" id="akY">' + esc(okLabel || "Evet") + '</button>' +
+      '<div style="height:8px"></div><button class="btn gh wide" id="akN">Vazgeç</button></div>');
+    m.querySelector("#akY").onclick = ()=>{ m.remove(); res(true); };
+    m.querySelector("#akN").onclick = ()=>{ m.remove(); res(false); };
+    m.addEventListener("click", e=>{ if(e.target === m) res(false); });
+  });
+}
+function askText(msg, pw){
+  return new Promise(res=>{
+    const m = modal('<h3>' + esc(msg) + '</h3><div class="mb">' +
+      '<input type="' + (pw ? "password" : "text") + '" id="axI" style="width:100%">' +
+      '<div style="height:12px"></div><button class="btn wide" id="axY">Tamam</button>' +
+      '<div style="height:8px"></div><button class="btn gh wide" id="axN">Vazgeç</button></div>');
+    const i = m.querySelector("#axI"); setTimeout(()=>i.focus(), 80);
+    const ok = ()=>{ const v = i.value; m.remove(); res(v); };
+    i.addEventListener("keydown", e=>{ if(e.key === "Enter") ok(); });
+    m.querySelector("#axY").onclick = ok;
+    m.querySelector("#axN").onclick = ()=>{ m.remove(); res(null); };
+  });
+}
+
+/* ========= BEKLENMEDİK HATALARI YUT ========= */
+window.addEventListener("error", e=>{
+  if(e.message && /ResizeObserver|Script error/i.test(e.message)) return;
+  LAST_ERR = { yer: (e.filename||"") + ":" + (e.lineno||"?"), mesaj: e.message || "bilinmiyor",
+               yigin: (e.error && e.error.stack || "").slice(0,400), ts: Date.now() };
+  toast("Beklenmedik hata: " + (e.message || "bilinmiyor"), 4000);
+});
+window.addEventListener("unhandledrejection", e=>{
+  const msg = errMsg(e.reason);
+  if(/AbortError|parola girilmedi/i.test(msg)) return;
+  LAST_ERR = { yer:"söz(promise)", mesaj: msg, yigin: (e.reason && e.reason.stack || "").slice(0,400), ts: Date.now() };
+  toast("İşlem tamamlanamadı: " + msg, 4000);
+});
+
+/* ========= KELİME ÖNBELLEĞİNİ KALICI TUT ========= */
+let wcT;
+function wcSave(){
+  clearTimeout(wcT);
+  wcT = setTimeout(async ()=>{
+    const keys = Object.keys(WC).slice(-400), out = {};
+    keys.forEach(k=>out[k] = WC[k]);
+    await store.set("lingopdf:wc", out);
+  }, 1500);
+}
+(async ()=>{
+  const saved = await store.get("lingopdf:wc");
+  if(saved) Object.assign(WC, saved);
+})();
+</script>
+<script>
+/* ========= ÇALIŞMALARI KORUMA: YEDEK / GERİ YÜKLEME / OTURUM ========= */
+async function backupAll(withFiles){
+  const t = work("yedek hazırlanıyor…");
+  try{
+    const pack = { v:1, ts:Date.now(), cards:S.cards, lib:S.lib.map(x=>Object.assign({}, x)), notes:{}, ayar:{ src:S.src, tgt:S.tgt, engine:S.engine, autosave:AUTOSAVE } };
+    for(const b of S.lib){
+      const n = await store.get("lingopdf:notes:" + b.id);
+      if(n && n.length) pack.notes[b.id] = n;
+    }
+    const cur = await store.get("lingopdf:notes:" + (S.id || S.name));
+    if(cur && cur.length) pack.notes[S.id || S.name] = cur;
+    dl("lingopdf-yedek-" + new Date().toISOString().slice(0,10) + ".json",
+       new Blob([JSON.stringify(pack)], { type:"application/json" }));
+    done(t);
+    toast("Yedek indi: kelimeler, notlar ve kitaplık listesi. PDF dosyalarının kendisi cihazda kalır.", 5000);
+  }catch(e){ done(t); toast("Yedek alınamadı: " + errMsg(e), 4000); }
+}
+
+function restoreAll(){
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = "application/json,.json"; inp.className = "hide";
+  document.body.appendChild(inp);
+  inp.onchange = async e=>{
+    const f = e.target.files[0]; inp.remove();
+    if(!f) return;
+    const t = work("yedek yükleniyor…");
+    try{
+      const pack = JSON.parse(await f.text());
+      if(!pack || !pack.v) throw new Error("dosya tanınmadı");
+      let add = 0;
+      (pack.cards||[]).forEach(c=>{
+        if(!S.cards.some(x=>x.word.toLowerCase() === String(c.word).toLowerCase())){ S.cards.push(c); add++; }
+      });
+      await saveCards();
+      for(const k of Object.keys(pack.notes||{})){
+        const cur = (await store.get("lingopdf:notes:" + k)) || [];
+        const merged = cur.slice();
+        (pack.notes[k]||[]).forEach(n=>{ if(!merged.some(x=>x.ts === n.ts)) merged.push(n); });
+        await store.set("lingopdf:notes:" + k, merged);
+      }
+      if(pack.ayar){ S.src = pack.ayar.src || S.src; S.tgt = pack.ayar.tgt || S.tgt; S.engine = pack.ayar.engine || S.engine; }
+      await loadNotes(); renderPins();
+      done(t);
+      toast(add + " kelime eklendi, notlar birleştirildi.", 4500);
+      if(S.tab === "lib") paneLib();
+    }catch(err){ done(t); toast("Geri yüklenemedi: " + errMsg(err), 4500); }
+  };
+  inp.click();
+}
+
+/* ---- açılışta son çalışmayı geri getir ---- */
+setTimeout(ensureTab, 300);          // geniş ekranda açılışta paneli doldur
+
+(async function restoreSession(){
+  const a = await store.get("lingopdf:autosave");
+  if(a === false) AUTOSAVE = false;
+  for(let i=0; i<30 && !S.lib.length; i++) await wait(120);   // kitaplık yüklenene kadar bekle
+  const last = await store.get("lingopdf:last");
+  if(!last || S.doc) return;
+  const b = S.lib.find(x=>x.id === last.id);
+  if(!b) return;
+  const btn = $("#bResume");
+  if(btn){
+    btn.textContent = "Devam et: " + b.name.replace(/\.pdf$/i,"").slice(0,24) + " (s." + (last.page || b.page || 1) + ")";
+    btn.classList.remove("hide");
+  }
+  try{
+    const bytes = await libBytes(b, null);
+    if(S.doc) return;                       // kullanıcı bu arada başka dosya açtıysa dokunma
+    await openBytes(bytes, b.name, b.id, last.page || b.page || 1);
+    toast("Kaldığın yerden devam: " + b.name.slice(0,26) + " · s." + S.page, 4000);
+  }catch(e){ /* sessiz: devam düğmesi zaten duruyor */ }
+})();
+</script>
+<script>
+/* ========= KENDİ API ANAHTARIN ========= */
+function keyUI(){
+  const m = modal('<h3>Çeviri bağlantısı</h3><div class="mb">' +
+    '<div class="opt" id="kpP" style="grid-template-columns:1fr">' +
+      '<button data-p="env"' + (API_PROV === "env" ? " class=\'on\'" : "") + '>Bulunduğu ortamın bağlantısı — kurulum yok, kotası dolabilir</button>' +
+      '<button data-p="gemini"' + (API_PROV === "gemini" ? " class=\'on\'" : "") + '>Google Gemini — ücretsiz, Google hesabı yeter</button>' +
+      '<button data-p="anthropic"' + (API_PROV === "anthropic" ? " class=\'on\'" : "") + '>Anthropic — ücretli, kredi gerekir</button>' +
+    '</div><div id="kpB"></div>' +
+    '<div style="height:10px"></div><button class="btn gh wide" id="kyX">Kapat</button></div>');
+  m.querySelector("#kyX").onclick = ()=> m.remove();
+  let prov = API_PROV;
+
+  const draw = ()=>{
+    m.querySelectorAll("#kpP button").forEach(b2=>b2.classList.toggle("on", b2.dataset.p === prov));
+    const box = m.querySelector("#kpB");
+    if(prov === "env"){
+      box.innerHTML = '<p class="hint" style="line-height:1.6">Uygulama, açıldığı ortamın Claude bağlantısını kullanır. ' +
+        'Kurulum gerekmez; o ortamın kullanım sınırı dolduğunda çeviri durur.</p>' +
+        '<div style="height:12px"></div><button class="btn wide" id="kyEnv">Bunu kullan</button>';
+      box.querySelector("#kyEnv").onclick = async ()=>{
+        API_PROV = "env"; API_KEY = "";
+        await store.set("lingopdf:prov", "env"); await store.set("lingopdf:key", "");
+        m.remove(); toast("Ortamın bağlantısına geçildi."); if(S.tab === "tools") paneTools();
+      };
+      return;
+    }
+    const gem = prov === "gemini";
+    const url = gem ? "https://aistudio.google.com/apikey" : "https://console.anthropic.com/settings/keys";
+    box.innerHTML =
+      '<p class="hint" style="line-height:1.7">' +
+        '<b>1.</b> Aşağıdaki düğme ' + (gem ? "Google AI Studio" : "Anthropic Console") + ' sayfasını açar.<br>' +
+        '<b>2.</b> ' + (gem ? "Google hesabınla giriş yap (ücretsiz, kart istemez)." : "Hesabına gir ve kredi yükle.") + '<br>' +
+        '<b>3.</b> ' + (gem ? '"Create API key" / "API anahtarı oluştur"a bas.' : '"Create Key"e bas.') + '<br>' +
+        '<b>4.</b> Anahtarı kopyala, buraya yapıştır, Kaydet.' +
+      '</p>' +
+      '<div style="height:10px"></div>' +
+      '<button class="btn wide" id="kyOpen">' + (gem ? "Google ile giriş yap ve anahtar al" : "Anthropic Console’u aç") + '</button>' +
+      '<div style="height:6px"></div><button class="btn gh wide" id="kyCopy">Adresi kopyala</button>' +
+      '<div style="height:12px"></div>' +
+      '<input type="password" id="kyI" placeholder="' + (gem ? "AIza..." : "sk-ant-...") + '" value="' +
+        (API_PROV === prov ? esc(API_KEY) : "") + '" style="width:100%">' +
+      '<div style="height:10px"></div><button class="btn wide" id="kySave">Kaydet ve dene</button>' +
+      (gem ? '<div style="height:8px"></div><button class="btn gh wide" id="kyModel">Kullanılacak modeli seç</button>' +
+             '<p class="note" id="kyMd">Model: ' + (GEM_MODEL ? esc(GEM_MODEL) : "anahtar kaydedilince otomatik seçilir") + '</p>' : "") +
+      '<div style="height:8px"></div><button class="btn gh wide" id="kyDel">Anahtarı sil</button>' +
+      '<p class="note">Anahtar yalnızca bu cihazda saklanır. ' +
+        (gem ? "Anahtar AIza ile başlar. Model adı koda gömülü değildir: uygulama hesabının erişebildiği en yeni Flash modelini kendisi seçer. " +
+               "Gemini’nin ücretsiz katmanı günlük istek sınırlıdır ve ücretsiz katmandaki içerik Google tarafından model geliştirmede kullanılabilir. " : "") +
+        'Bu sayfa Claude içinde gömülü çalışıyorsa dış servise erişim engellenebilir; o durumda dosyayı indirip tarayıcıda aç.</p>';
+
+    box.querySelector("#kyOpen").onclick = ()=>{
+      const w = window.open(url, "_blank", "noopener");
+      if(!w) toast("Tarayıcı yeni sekmeyi engelledi — “Adresi kopyala”yı kullan.", 4500);
+    };
+    box.querySelector("#kyCopy").onclick = async ()=>{
+      try{ await navigator.clipboard.writeText(url); toast("Adres kopyalandı: " + url, 5000); }
+      catch(e){ toast(url, 8000); }
+    };
+    const mb = box.querySelector("#kyModel");
+    if(mb) mb.onclick = async ()=>{
+      if(!API_KEY) return toast("Önce anahtarı kaydet.");
+      const t = work("modeller alınıyor…");
+      let liste = [];
+      try{
+        const r = await fetch(GEM_BASE + "models?key=" + encodeURIComponent(API_KEY));
+        const d = JSON.parse(await r.text());
+        if(d && d.error) throw new Error(d.error.message);
+        liste = (d.models||[])
+          .filter(x=>(x.supportedGenerationMethods||[]).includes("generateContent"))
+          .map(x=>(x.name||"").replace("models/",""))
+          .filter(a=>/^gemini-/.test(a));
+      }catch(e){ done(t); return toast("Model listesi alınamadı: " + errMsg(e), 5000); }
+      done(t);
+      if(!liste.length) return toast("Bu anahtarla model bulunamadı.", 4000);
+      const puan = a=>parseFloat((/gemini-([\d.]+)/.exec(a)||[])[1] || 0);
+      liste.sort((a,b)=> puan(b) - puan(a));
+      const m2 = modal('<h3>Gemini modeli</h3><div class="mb">' +
+        '<p class="hint">Varsayılan: en yeni kararlı Flash modeli. Listeden başka birini seçebilirsin.</p>' +
+        '<div style="height:8px"></div><button class="btn wide" id="mdAuto">Otomatik (en yeni kararlı)</button>' +
+        '<div style="height:10px"></div>' + liste.map(a=>
+          '<button class="btn gh wide" data-m="' + esc(a) + '" style="margin-bottom:6px">' + esc(a) +
+          (a === GEM_MODEL ? " ✓" : "") + '</button>').join("") +
+        '<div style="height:8px"></div><button class="btn gh wide" id="mdX">Kapat</button></div>');
+      m2.querySelector("#mdX").onclick = ()=> m2.remove();
+      m2.querySelector("#mdAuto").onclick = async ()=>{
+        await store.del("lingopdf:gmodel"); GEM_MODEL = null;
+        const ad = await gemModelSec(true);
+        m2.remove(); const md = box.querySelector("#kyMd"); if(md) md.textContent = "Model: " + ad + " (otomatik)";
+        toast("Otomatik seçim açık: " + ad, 3000);
+      };
+      m2.querySelectorAll("[data-m]").forEach(b2=>b2.onclick = async ()=>{
+        GEM_MODEL = b2.dataset.m;
+        await store.set("lingopdf:gmodel", { ad: GEM_MODEL, ts: Date.now(), elle: true });
+        m2.remove(); const md = box.querySelector("#kyMd"); if(md) md.textContent = "Model: " + GEM_MODEL + " (elle seçildi)";
+        toast("Model: " + GEM_MODEL, 3000);
+      });
+    };
+    box.querySelector("#kyDel").onclick = async ()=>{
+      API_KEY = ""; API_PROV = "env";
+      await store.set("lingopdf:key", ""); await store.set("lingopdf:prov", "env");
+      m.remove(); toast("Anahtar silindi, ortamın bağlantısına dönüldü."); if(S.tab === "tools") paneTools();
+    };
+    box.querySelector("#kySave").onclick = async ()=>{
+      const v = box.querySelector("#kyI").value.trim();
+      if(!v) return toast("Anahtar boş.");
+      const oldK = API_KEY, oldP = API_PROV;
+      API_KEY = v; API_PROV = prov;
+      const t = work("anahtar deneniyor…");
+      try{
+        if(prov === "gemini"){ GEM_MODEL = null; await store.del("lingopdf:gmodel"); }
+        const r = await ai("Tek kelime yaz.", "Almancada 'ev' ne demek? Tek kelime yaz.");
+        await store.set("lingopdf:key", v); await store.set("lingopdf:prov", prov);
+        done(t); m.remove();
+        toast("Bağlandı" + (prov === "gemini" && GEM_MODEL ? " — model: " + GEM_MODEL : "") + ".", 5000);
+        if(S.tab === "tools") paneTools();
+      }catch(e){
+        done(t); API_KEY = oldK; API_PROV = oldP;
+        toast("Olmadı: " + errMsg(e), 6000);
+      }
+    };
+  };
+  m.querySelectorAll("#kpP button").forEach(b2=>b2.onclick = ()=>{ prov = b2.dataset.p; draw(); });
+  draw();
+}
+</script>
+<script>
+/* ================= YARDIM ================= */
+const APP_VER = "1.5";
+(function showVer(){ const v = document.getElementById("ver"); if(v) v.textContent = APP_VER; })();
+
+function helpUI(){
+  const m = modal('<h3>LingoPDF v' + APP_VER + ' — nasıl kullanılır</h3><div class="mb" style="line-height:1.65">' +
+    '<div class="note-it"><div class="t"><b>Okuma</b><br>' +
+      'PDF aç → sayfa ekrana sığar. Parmakla sağa/sola kaydır: sayfa değişir. ' +
+      'Alt çubuk: A− A+ yakınlaştırma, “sığdır”, “gece” (koyu sayfa), “dikey”, “not”.<br>' +
+      '<b>dikey</b>: sayfalar alt alta dizilir, aşağı kaydırarak okursun (uzun metinler için). ' +
+      'Yeniden basınca sayfa sayfa okumaya dönersin. Seçtiğin kip hatırlanır.<br>' +
+      '<b>sığdırma düğmesi</b> üç kip arasında döner: genişlik → tam sayfa → %100.<br>' +
+      '<b>▤ paneli alta al</b> (üst çubuk, tablette): sağdaki panel alta iner, sayfa tam genişlikte okunur; ' +
+      'sekmeye basınca panel alttan açılır.<br>' +
+      '<b>⤢ tam ekran</b>: üst çubuk ve paneller gizlenir, sayfa bütün ekranı kaplar. ' +
+      'Çıkmak için sağ üstteki ⤢ çık ya da Esc.</div></div>' +
+    '<div class="note-it"><div class="t"><b>Çeviri — üç seviye</b><br>' +
+      '<b>Kelime:</b> sayfada ya da Satır sekmesinde bir kelimeye dokun → anlam, kök, çekim, örnekler. 🔊 dinletir, <b>çekim</b> tam tablo verir.<br>' +
+      '<b>Cümle:</b> metni seç → “Seçimi çevir” → çeviri + kelime kelime çözümleme + cümle yapısı.<br>' +
+      '<b>Sayfa:</b> Çeviri sekmesi → sayfanın tamamı.</div></div>' +
+    '<div class="note-it"><div class="t"><b>Kelime biriktirme</b><br>' +
+      'Kartta <b>Kaydet</b> → Kelimeler sekmesi. Tekrar: Bilmiyorum / Zor / Biliyorum ile 6 kutulu aralıklı tekrar ' +
+      '(10 dk → 1 → 2 → 5 → 10 → 21 gün). CSV ve Anki olarak dışa aktarılır.</div></div>' +
+    '<div class="note-it"><div class="t"><b>Çalışma araçları</b><br>' +
+      'Araçlar → zor kelimeler (seviyeye göre), sayfadan alıştırma, içindekiler, belgede arama. ' +
+      'Kitaplık sekmesinden bütün PDF’lerinde tek seferde arama.</div></div>' +
+    '<div class="note-it"><div class="t"><b>PDF işleri</b><br>' +
+      'Parçala, birleştir, sayfaları düzenle (döndür/sil/sırala), filigran ve sayfa numarası, yazdır, imzala, ' +
+      'not al ve notlu PDF üret, resimlerden veya kamerayla PDF oluştur, TXT/MD/HTML/JSON/PNG’ye dönüştür. ' +
+      'Taranmış sayfalarda <b>OCR</b> metni çıkarır.</div></div>' +
+    '<div class="note-it"><div class="t"><b>Çalışmaların kaybolmaz</b><br>' +
+      'Açtığın PDF kendiliğinden kitaplığa alınır, kaldığın sayfa hatırlanır, uygulama açılışında son belge geri gelir. ' +
+      'Kitaplık → <b>Yedek al</b> ile kelime ve notlarını .json olarak sakla.</div></div>' +
+    '<div class="note-it"><div class="t"><b>Klavyede</b><br>← → sayfa · Esc açık pencereyi kapat</div></div>' +
+    '<div class="note-it"><div class="t"><b>Çeviri durursa</b><br>' +
+      'Araçlar → Çeviri bağlantısı. Ücretsiz Google Gemini anahtarı bağlayabilirsin; ' +
+      'sayfa Claude içinde gömülü çalışırken dış servisler engellenebilir, o durumda dosyayı indirip tarayıcıda aç.</div></div>' +
+    '<div style="height:10px"></div><button class="btn gh wide" id="hpX">Kapat</button></div>');
+  m.querySelector("#hpX").onclick = ()=> m.remove();
+}
+
+/* ilk açılışta bir kez yardım göster */
+(async ()=>{
+  const seen = await store.get("lingopdf:seen");
+  if(!seen){ await store.set("lingopdf:seen", true); setTimeout(()=>{ if(!S.doc) helpUI(); }, 1200); }
+})();
+</script>
+<script>
+/* ================= ÖZ-SINAMA ================= */
+let LAST_ERR = null;
+
+async function selfTest(){
+  const m = modal('<h3>Kendini sına</h3><div class="mb"><div id="stOut"><p class="hint"><span class="spin"></span>sınanıyor…</p></div>' +
+    '<div style="height:10px"></div><button class="btn wide" id="stCopy">Sonucu kopyala</button>' +
+    '<div style="height:6px"></div><button class="btn gh wide" id="stX">Kapat</button></div>');
+  m.querySelector("#stX").onclick = ()=> m.remove();
+  const rows = [];
+  const add = (ad, deger, iyi)=> rows.push({ ad, deger: String(deger), iyi });
+  const tryAdd = (ad, fn)=>{ try{ const [d, i] = fn(); add(ad, d, i); }catch(e){ add(ad, "okunamadı — " + errMsg(e), false); } };
+
+  add("Sürüm", APP_VER, true);
+  add("Ekran", innerWidth + "×" + innerHeight + (innerWidth >= 901 ? " (geniş düzen)" : " (dar düzen)"), true);
+  add("Çalışma yeri", location.protocol === "file:" ? "dosyadan (file://) — bazı tarayıcılar dış istekleri engeller"
+      : location.protocol + "//" + location.hostname, location.protocol !== "file:");
+  let standalone = "bilinmiyor";
+  try{ standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone ? "evet" : "hayır"; }catch(e){}
+  add("Ana ekran kipi", standalone, true);
+  add("Kalıcı depolama", store.kindName(), store.kind() !== "mem");
+  if(API_PROV === "gemini"){
+    try{ add("Gemini modeli", await gemModelSec(false), true); }
+    catch(e){ add("Gemini modeli", "seçilemedi — " + errMsg(e), false); }
+  }
+  add("Çeviri bağlantısı", API_PROV === "gemini" ? "Google Gemini (kendi anahtarın)" :
+      API_PROV === "anthropic" ? "Anthropic (kendi anahtarın)" : "ortamın bağlantısı", true);
+  tryAdd("PDF motoru", ()=> [typeof pdfjsLib !== "undefined" ? "yüklü" : "YÜKLENMEDİ", typeof pdfjsLib !== "undefined"]);
+  tryAdd("PDF düzenleyici", ()=> [typeof PDFLib !== "undefined" ? "yüklü" : "YÜKLENMEDİ", typeof PDFLib !== "undefined"]);
+  tryAdd("Yazı tipleri", ()=> [document.fonts && document.fonts.status ? document.fonts.status : "bilinmiyor", true]);
+
+  if(S.doc) try{
+    add("Açık belge", S.name + " · " + S.pages + " sayfa · " + S.page + ". sayfada", true);
+    const txt = pageText();
+    add("Bu sayfadaki metin", txt.trim().length + " karakter" + (txt.trim().length ? "" : " — taranmış olabilir, OCR gerekir"), true);
+    add("Dokunulabilir kelime", document.querySelectorAll("#layer .w").length, true);
+    add("Kitaplık", S.lib.length + " belge", true);
+    add("Kelime kartı", S.cards.length + " kayıt", true);
+  }catch(e){ add("Açık belge", "okunamadı — " + errMsg(e), false); }
+  else add("Açık belge", "yok", true);
+
+  /* panelleri tek tek dene */
+  const kayit = $("#sheetBody").innerHTML, sekme = S.tab;
+  for(const [ad, fn] of [["Kitaplık", paneLib], ["Çeviri", panePage], ["Satır", paneLines],
+                         ["Kelimeler", paneCards], ["Notlar", paneNotes], ["Araçlar", paneTools]]){
+    try{ fn(); add("Panel: " + ad, $("#sheetBody").innerHTML.length > 20 ? "çalışıyor" : "BOŞ DÖNDÜ",
+                   $("#sheetBody").innerHTML.length > 20); }
+    catch(e){ add("Panel: " + ad, "HATA — " + errMsg(e), false); }
+  }
+  $("#sheetBody").innerHTML = kayit; S.tab = sekme;
+
+  /* çeviri gerçekten çalışıyor mu */
+  const t0 = Date.now();
+  try{
+    const r = await ai("Tek kelime yaz.", "Almancada 'ev' ne demek? Tek kelime yaz.");
+    add("Çeviri denemesi", "çalıştı (" + (Date.now()-t0) + " ms, yanıt: " + r.slice(0,20) + ")", true);
+  }catch(e){ add("Çeviri denemesi", "BAŞARISIZ — " + errMsg(e), false); }
+
+  /* seslendirme */
+  add("Seslendirme", ("speechSynthesis" in window) ? "var" : "yok", "speechSynthesis" in window);
+
+  if(LAST_ERR) add("Son yakalanan hata", LAST_ERR.yer + " → " + LAST_ERR.mesaj, false);
+
+  const html = rows.map(r=>'<div class="card"><div class="hd2"><span class="de" style="font-size:14px">' +
+    (r.iyi ? "✅" : "⚠️") + " " + esc(r.ad) + '</span></div><div class="meta" style="white-space:pre-wrap">' +
+    esc(r.deger) + '</div></div>').join("");
+  const box = m.querySelector("#stOut");
+  if(box) box.innerHTML = html;
+  const metin = "LingoPDF " + APP_VER + " öz-sınama\n" + rows.map(r=>(r.iyi ? "OK " : "!! ") + r.ad + ": " + r.deger).join("\n") +
+    (LAST_ERR && LAST_ERR.yigin ? "\n\nYIGIN:\n" + LAST_ERR.yigin : "");
+  const cp = m.querySelector("#stCopy");
+  if(cp) cp.onclick = async ()=>{
+    try{ await navigator.clipboard.writeText(metin); toast("Kopyalandı — buraya yapıştırabilirsin."); }
+    catch(e){ dl("lingopdf-sinama.txt", new Blob([metin], { type:"text/plain" })); toast("Metin dosyası indirildi."); }
+  };
+}
+</script>
+<script>
+/* ================= DİKEY AKIŞ (sayfalar alt alta) ================= */
+const FLOW = (()=>{
+  const box = document.getElementById("flow");
+  let slots = [], obs = null, geo = null, busy = new Set(), ready = new Set(), lines = {};
+
+  async function measure(){                       // 1. sayfadan ölçü al
+    const pg = await S.doc.getPage(1);
+    const v1 = pg.getViewport({ scale:1 });
+    const sc = S.fit ? fitScale(v1) : S.scale;
+    return { w: v1.width * sc, h: v1.height * sc, sc };
+  }
+
+  async function build(){
+    if(!S.doc) return;
+    geo = await measure();
+    S.scale = geo.sc;
+    box.innerHTML = "";
+    slots = []; ready.clear(); busy.clear(); lines = {};
+    const frag = document.createDocumentFragment();
+    for(let n = 1; n <= S.pages; n++){
+      const d = document.createElement("div");
+      d.className = "pg"; d.dataset.n = n;
+      d.style.width = geo.w + "px"; d.style.height = geo.h + "px";
+      d.innerHTML = '<canvas></canvas><div class="lyr"></div><div class="pns"></div><div class="no">' + n + '</div>';
+      if(night) d.classList.add("night");
+      frag.appendChild(d); slots.push(d);
+    }
+    box.appendChild(frag);
+    if(obs) obs.disconnect();
+    obs = new IntersectionObserver(es=>{
+      es.forEach(e=>{
+        const n = +e.target.dataset.n;
+        if(e.isIntersecting) draw(n);
+        else if(Math.abs(n - S.page) > 6) clear(n);
+      });
+    }, { root: viewer, rootMargin: "900px 0px" });
+    slots.forEach(el=>obs.observe(el));
+    goTo(S.page, true);
+  }
+
+  async function draw(n){
+    const el = slots[n-1];
+    if(!el || ready.has(n) || busy.has(n)) return;
+    busy.add(n);
+    try{
+      const pg = await S.doc.getPage(n);
+      const v1 = pg.getViewport({ scale:1 });
+      const sc = geo.w / v1.width;
+      const vp = pg.getViewport({ scale: sc });
+      el.style.height = vp.height + "px";        // gerçek boy (farklı ölçüdeki sayfalar için)
+      const cvs = el.querySelector("canvas");
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      cvs.width = Math.floor(vp.width*dpr); cvs.height = Math.floor(vp.height*dpr);
+      const x = cvs.getContext("2d");
+      x.setTransform(dpr,0,0,dpr,0,0);
+      x.fillStyle = "#fff"; x.fillRect(0,0,vp.width,vp.height);
+      await pg.render({ canvasContext:x, viewport:vp }).promise;
+      const tc = await pg.getTextContent();
+      buildLayer(tc, vp, el.querySelector(".lyr"), sc);
+      lines[n] = groupLines(tc, vp);
+      pins(n);
+      ready.add(n);
+    }catch(e){ /* sayfa çizilemedi, sonra tekrar denenir */ }
+    busy.delete(n);
+  }
+
+  function clear(n){
+    const el = slots[n-1]; if(!el || !ready.has(n)) return;
+    const cvs = el.querySelector("canvas");
+    cvs.width = cvs.height = 1;                   // belleği boşalt
+    el.querySelector(".lyr").innerHTML = "";
+    ready.delete(n);
+  }
+
+  function pins(n){
+    const el = slots[n-1]; if(!el) return;
+    const b = el.querySelector(".pns");
+    b.innerHTML = notes.filter(x=>x.page === n).map(x=>
+      '<div class="pin" style="left:' + (x.fx*100).toFixed(2) + '%;top:' + (x.fy*100).toFixed(2) + '%" data-ts="' + x.ts + '">' +
+      esc((x.text || x.quote || "not").slice(0,22)) + '</div>').join("");
+    b.querySelectorAll(".pin").forEach(p2=>p2.onclick = ev=>{
+      ev.stopPropagation();
+      const nt = notes.find(y=>String(y.ts) === p2.dataset.ts);
+      if(nt) editNote(nt);
+    });
+  }
+  function pinsAll(){ slots.forEach((_, i)=> pins(i+1)); }
+
+  function setPage(n, skipScroll){
+    if(n === S.page) return;
+    S.page = n;
+    $("#pnum").textContent = n + " / " + S.pages;
+    S.lines = lines[n] || [];
+    cacheLoad(); checkOcr();
+    if(S.tab === "lines") paneLines();
+    if(S.tab === "page") panePage();
+    saveProgress();
+  }
+
+  function goTo(n, instant){
+    const el = slots[n-1]; if(!el) return;
+    S.page = n;
+    $("#pnum").textContent = n + " / " + S.pages;
+    viewer.scrollTop = el.offsetTop - 8;
+    draw(n).then(()=>{ S.lines = lines[n] || []; cacheLoad(); checkOcr();
+      if(S.tab === "lines") paneLines(); if(S.tab === "page") panePage(); });
+  }
+
+  let sT;
+  viewer.addEventListener("scroll", ()=>{
+    if(!S.flow || !slots.length) return;
+    clearTimeout(sT);
+    sT = setTimeout(()=>{
+      const top = viewer.scrollTop + 40;
+      let best = 1;
+      for(let i=0; i<slots.length; i++){ if(slots[i].offsetTop <= top) best = i+1; else break; }
+      setPage(best);
+    }, 120);
+  }, { passive:true });
+
+  /* akış kipinde not bırakma */
+  box.addEventListener("click", e=>{
+    if(!noting || e.target.closest(".pin")) return;
+    const el = e.target.closest(".pg"); if(!el) return;
+    const r = el.getBoundingClientRect();
+    editNote({ page:+el.dataset.n, fx:(e.clientX - r.left)/r.width, fy:(e.clientY - r.top)/r.height,
+               text:"", quote:selText(), ts:Date.now() });
+  });
+
+  return { build, goTo, setPage, pinsAll, clearAll: ()=>{ box.innerHTML = ""; slots = []; ready.clear(); } };
+})();
+
+async function setFlow(on){
+  S.flow = !!on;
+  document.body.classList.toggle("flow", S.flow);
+  $("#bFlow").textContent = S.flow ? "sayfa" : "dikey";
+  await store.set("lingopdf:flow", S.flow);
+  if(!S.doc) return;
+  if(S.flow){ await FLOW.build(); }
+  else { FLOW.clearAll(); await renderPage(); }
+}
+$("#bFlow").onclick = ()=>{
+  if(!S.doc) return toast("Önce bir PDF aç.");
+  setFlow(!S.flow);
+  toast(S.flow ? "Dikey akış: sayfalar alt alta, aşağı kaydır." : "Sayfa sayfa: yana kaydır.", 3000);
+};
+
+/* yakınlaştırma ve gece kipi akışta da geçerli olsun */
+["#bZin","#bZout","#bFit"].forEach(id=>{
+  const b = $(id), eski = b.onclick;
+  b.onclick = async ()=>{
+    if(!S.flow) return eski && eski();
+    if(id === "#bFit") S.fit = true;
+    else { S.fit = false; S.scale = id === "#bZin" ? Math.min(4, S.scale*1.25) : Math.max(.25, S.scale/1.25); }
+    await FLOW.build();
+  };
+});
+
+/* not iğneleri akışta da tazelensin */
+const _renderPins = renderPins;
+renderPins = function(){ _renderPins(); if(S.flow) FLOW.pinsAll(); };
+
+/* açılışta son seçilen kip */
+(async ()=>{
+  const f = await store.get("lingopdf:flow");
+  if(f){ S.flow = true; document.body.classList.add("flow"); $("#bFlow").textContent = "sayfa";
+         for(let i=0; i<40 && !S.doc; i++) await wait(150);
+         if(S.doc) await FLOW.build(); }
+})();
+</script>
+<script>
+/* ================= TAM EKRAN (zen) ================= */
+async function setZen(on){
+  document.body.classList.toggle("zen", !!on);
+  await store.set("lingopdf:zen", !!on);
+  try{
+    if(on && document.documentElement.requestFullscreen && !document.fullscreenElement)
+      await document.documentElement.requestFullscreen();
+    else if(!on && document.fullscreenElement && document.exitFullscreen)
+      await document.exitFullscreen();
+  }catch(e){ /* iPad Safari tam ekran API'sini desteklemiyor — düzen kipi yine de çalışır */ }
+  if(!S.doc) return;
+  if(S.flow && typeof FLOW !== "undefined") await FLOW.build();
+  else await renderPage();
+}
+$("#bZen").onclick = ()=>{ setZen(true); toast("Tam ekran. Çıkmak için sağ üstteki düğme ya da Esc.", 3000); };
+$("#zenX").onclick = ()=> setZen(false);
+addEventListener("keydown", e=>{ if(e.key === "Escape" && document.body.classList.contains("zen")) setZen(false); });
+
+/* ekran döndüğünde ölçüleri tazele */
+addEventListener("orientationchange", ()=> setTimeout(()=>{
+  if(!S.doc) return;
+  if(S.flow && typeof FLOW !== "undefined") FLOW.build(); else renderPage();
+}, 350));
+
+/* açılışta kayıtlı kipler */
+(async ()=>{
+  const fm = await store.get("lingopdf:fitmode");
+  S.fitMode = fm || "p";        // varsayılan: sayfanın tamamı ekrana otursun
+  fitLabel();
+  if(await store.get("lingopdf:zen")) document.body.classList.add("zen");
+  for(let i=0; i<40 && !S.doc; i++) await wait(150);
+  if(S.doc && S.fit){
+    if(S.flow && typeof FLOW !== "undefined") await FLOW.build(); else await renderPage();
+  }
+})();
+</script>
+<script>
+/* ============ PANELİ ALTA AL (tablette tam genişlik okuma) ============ */
+async function setCompact(on){
+  document.body.classList.toggle("compact", !!on);
+  await store.set("lingopdf:compact", !!on);
+  $("#bPanel").textContent = on ? "▥" : "▤";
+  $("#bPanel").title = on ? "Paneli yana al" : "Paneli alta al";
+  if(on) closeSheet(); else ensureTab();
+  if(!S.doc) return;
+  if(S.flow && typeof FLOW !== "undefined") await FLOW.build();
+  else await renderPage();
+}
+$("#bPanel").onclick = ()=>{
+  if(innerWidth < 901) return toast("Bu düğme geniş ekranlarda çalışır; telefonda panel zaten altta.", 3000);
+  const on = !document.body.classList.contains("compact");
+  setCompact(on);
+  toast(on ? "Panel alta alındı — sayfa tam genişlikte. Sekmeye basınca panel alttan açılır."
+           : "Panel yana alındı.", 3200);
+};
+(async ()=>{
+  const kayit = await store.get("lingopdf:compact");
+  // İlk açılışta tablette varsayılan: panel altta, sayfa tam genişlikte.
+  const acik = (kayit === null || kayit === undefined) ? innerWidth >= 901 : !!kayit;
+  if(acik){
+    document.body.classList.add("compact");
+    $("#bPanel").textContent = "▥"; $("#bPanel").title = "Paneli yana al";
+    for(let i=0; i<40 && !S.doc; i++) await wait(150);
+    if(S.doc){ if(S.flow && typeof FLOW !== "undefined") await FLOW.build(); else await renderPage(); }
+  }
+})();
+</script>
+<script>
+/* ============ ÇEVİRİ BAĞLANTISI YOKLAMASI ============ */
+let NET_OK = null, NET_BUSY = false;
+
+function netBar(mesaj){
+  $("#netTx").innerHTML = mesaj;
+  $("#netBar").classList.add("on");
+}
+function netHide(){ $("#netBar").classList.remove("on"); }
+$("#netX").onclick  = netHide;
+$("#netFix").onclick = ()=>{ netHide(); keyUI(); };
+$("#netRe").onclick = ()=>{ netHide(); probeNet(true); };
+
+function netSebep(msg){
+  const dosyadan = location.protocol === "file:";
+  if(/engellendi|ulaşılamadı|hiç gitmedi|network|load failed|CORS/i.test(msg))
+    return "Çeviri isteği <b>hiç gitmedi</b>." + (dosyadan
+      ? " Sayfa dosyadan (file://) açıldığı için tarayıcı dış isteği engelliyor olabilir; dosyayı bir adrese koyup oradan aç (Netlify Drop, GitHub Pages)."
+      : " Ağ engeli ya da kota olabilir. Kendi anahtarını bağlamayı dene.");
+  if(/kullanım sınırına|rate limit|quota|429/i.test(msg))
+    return "Çeviri servisi <b>kullanım sınırına</b> takıldı. Kendi ücretsiz Google Gemini anahtarını bağlarsan bu sınırdan kurtulursun.";
+  return "Çeviri bağlantısı çalışmıyor: " + esc(msg);
+}
+
+async function probeNet(sessizDegil){
+  if(NET_BUSY) return NET_OK;
+  NET_BUSY = true;
+  try{
+    await ai("Tek kelime yaz.", "Almancada 'ev' ne demek? Tek kelime yaz.");
+    NET_OK = true; netHide();
+    if(sessizDegil) toast("Çeviri bağlantısı çalışıyor.", 2500);
+  }catch(e){
+    NET_OK = false;
+    netBar(netSebep(errMsg(e)));
+  }
+  NET_BUSY = false;
+  return NET_OK;
+}
+
+/* belge açılınca bir kez sessizce yokla */
+const _openBytes = openBytes;
+openBytes = async function(...a){
+  const r = await _openBytes.apply(this, a);
+  if(NET_OK !== true) setTimeout(()=>probeNet(false), 800);
+  return r;
+};
+
+/* çeviri sırasında hata olursa da aynı açıklamayı göster */
+const _ai = ai;
+ai = async function(...a){
+  try{
+    const r = await _ai.apply(this, a);
+    if(NET_OK === false){ NET_OK = true; netHide(); }
+    return r;
+  }catch(e){
+    NET_OK = false;
+    netBar(netSebep(errMsg(e)));
+    throw e;
+  }
+};
+</script>
+<script>
+/* ============ DOKUNMA DAVRANIŞI ============
+   "tap"  : kelimeye dokununca kart açılır (varsayılan)
+   "hold" : kelimeyi basılı tutunca açılır — kaydırırken kaza olmaz
+   "off"  : dokunma kart açmaz; çeviri yalnız düğmelerle                */
+let TAP_MODE = "tap";
+let SON_HAREKET = { sure: 0, mesafe: 0, ts: 0 };
+
+(function jestTakip(){
+  let x0 = 0, y0 = 0, t0 = 0, izle = false;
+  const bas = e=>{
+    const p = e.touches ? e.touches[0] : e;
+    x0 = p.clientX; y0 = p.clientY; t0 = Date.now(); izle = true;
+  };
+  const kalk = e=>{
+    if(!izle) return; izle = false;
+    const p = e.changedTouches ? e.changedTouches[0] : e;
+    SON_HAREKET = { sure: Date.now() - t0,
+      mesafe: Math.hypot((p.clientX||0) - x0, (p.clientY||0) - y0), ts: Date.now() };
+  };
+  addEventListener("touchstart", bas, { passive:true });
+  addEventListener("touchend", kalk, { passive:true });
+  addEventListener("mousedown", bas, true);
+  addEventListener("mouseup", kalk, true);
+})();
+
+function tryOpenWord(word, line, el){
+  if(TAP_MODE === "off"){
+    toast("Dokunmayla çeviri kapalı. Araçlar → Dokunma davranışı’ndan açabilirsin.", 3500);
+    return;
+  }
+  const h = SON_HAREKET, taze = Date.now() - h.ts < 1200;
+  if(taze && h.mesafe > 12) return;                       // kaydırma sayılır, kart açma
+  if(TAP_MODE === "hold"){
+    if(!taze || h.sure < 320){
+      if(el){ el.classList.add("act"); setTimeout(()=>el.classList.remove("act"), 400); }
+      toast("Kelimeyi basılı tut → kart açılır.", 2200);
+      return;
+    }
+  }
+  openWord(word, line);
+}
+
+/* Araçlar'a ayar */
+const _paneTools = paneTools;
+paneTools = function(){
+  _paneTools();
+  const b = $("#sheetBody"); if(!b) return;
+  const ad = { tap:"Dokununca", hold:"Basılı tutunca", off:"Kapalı" };
+  const box = document.createElement("div");
+  box.innerHTML = '<div style="height:12px"></div><label class="lb">Dokunma davranışı (kelime kartı)</label>' +
+    '<div class="opt" id="tvTap">' + Object.keys(ad).map(k=>
+      '<button data-t="' + k + '"' + (TAP_MODE === k ? ' class="on"' : "") + '>' + ad[k] + '</button>').join("") + '</div>' +
+    '<p class="note">“Basılı tutunca” seçersen sayfayı kaydırırken ya da satıra dokunurken kart açılmaz; ' +
+    'çeviri yalnız sen isteyince gelir.</p>';
+  b.appendChild(box);
+  box.querySelectorAll("#tvTap button").forEach(x=>x.onclick = async ()=>{
+    TAP_MODE = x.dataset.t;
+    await store.set("lingopdf:tap", TAP_MODE);
+    box.querySelectorAll("#tvTap button").forEach(y=>y.classList.toggle("on", y === x));
+    toast("Kelime kartı: " + ad[TAP_MODE].toLowerCase(), 2200);
+  });
+};
+
+(async ()=>{ const t = await store.get("lingopdf:tap"); if(t) TAP_MODE = t; })();
+</script>
+<script>
+/* ============ ÜST BLOĞUN YÜKSEKLİĞİNİ ÖLÇ ============ */
+function headOlc(){
+  const h = document.getElementById("head");
+  if(!h) return;
+  const y = Math.round(h.getBoundingClientRect().height);
+  if(y > 0) document.documentElement.style.setProperty("--headH", y + "px");
+}
+headOlc();
+addEventListener("resize", ()=> setTimeout(headOlc, 80));
+addEventListener("orientationchange", ()=> setTimeout(headOlc, 350));
+if(window.ResizeObserver){
+  const ro = new ResizeObserver(()=>{
+    const onceki = getComputedStyle(document.documentElement).getPropertyValue("--headH");
+    headOlc();
+    const simdi = getComputedStyle(document.documentElement).getPropertyValue("--headH");
+    if(onceki !== simdi && S.doc && S.fit){
+      if(S.flow && typeof FLOW !== "undefined") FLOW.build(); else renderPage();
+    }
+  });
+  const h = document.getElementById("head");
+  if(h) ro.observe(h);
+}
+</script>
+</body>
+</html>
